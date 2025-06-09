@@ -153,7 +153,7 @@ export class Player {
         if (this.positionTickInterval) return;
         
         this.positionTickInterval = setInterval(() => {
-            if (this.playing && this.queue.current) {
+            if (this.playing && !this.paused && this.queue.current) {
                 this.LavalinkManager.emit("playerPositionTick", this, this.position);
             }
         }, this.POSITION_TICK_INTERVAL);
@@ -492,12 +492,17 @@ export class Player {
      */
     async pause() {
         if (this.paused && !this.playing) throw new Error("Player is already paused - not able to pause.");
+        
+        // Save the current position before pausing
+        this.lastSavedPosition = this.position;
         this.paused = true;
         this.lastPositionChange = null; // needs to removed to not cause issues
+        
         const now = performance.now();
         await this.node.updatePlayer({ guildId: this.guildId, playerOptions: { paused: true } });
         this.ping.lavalink = Math.round((performance.now() - now) / 10) / 100;
-        // emit the event
+        
+        // emit the event with current position
         this.LavalinkManager.emit("playerPaused", this, this.queue.current);
         this.stopPositionTick();
         return this;
@@ -508,11 +513,17 @@ export class Player {
      */
     async resume() {
         if (!this.paused) throw new Error("Player isn't paused - not able to resume.");
+        
+        // Update position tracking for accurate resumption
+        this.lastPosition = this.lastSavedPosition;
+        this.lastPositionChange = Date.now();
         this.paused = false;
+        
         const now = performance.now();
         await this.node.updatePlayer({ guildId: this.guildId, playerOptions: { paused: false } });
         this.ping.lavalink = Math.round((performance.now() - now) / 10) / 100;
-        // emit the event
+        
+        // emit the event with the restored position
         this.LavalinkManager.emit("playerResumed", this, this.queue.current);
         this.startPositionTick();
         return this;
