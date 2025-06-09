@@ -242,7 +242,7 @@ export class Queue {
 
         // Emit queueSongAdd event through LavalinkManager
         if (this.eventEmitter) {
-            this.eventEmitter.emit("queueSongAdd", tracksToAdd);
+            this.eventEmitter.emit("queueSongAdd", this.eventEmitter.players.get(this.guildId), tracksToAdd);
         }
 
         if (typeof this.queueChanges?.tracksAdd === "function") try { this.queueChanges.tracksAdd(this.guildId, tracksToAdd, this.tracks.length, oldStored, this.utils.toJSON()); } catch { /*  */ }
@@ -273,10 +273,10 @@ export class Queue {
         if (this.eventEmitter) {
             if (TrackOrTracks) {
                 const tracksToAdd = (Array.isArray(TrackOrTracks) ? TrackOrTracks : [TrackOrTracks]).flat(2).filter(v => this.managerUtils.isTrack(v) || this.managerUtils.isUnresolvedTrack(v));
-                this.eventEmitter.emit("queueSongAdd", tracksToAdd);
+                this.eventEmitter.emit("queueSongAdd", this.eventEmitter.players.get(this.guildId), tracksToAdd);
             }
             if (spliced.length > 0) {
-                this.eventEmitter.emit("queueSongRemove", { removed: spliced });
+                this.eventEmitter.emit("queueSongRemove", this.eventEmitter.players.get(this.guildId), { removed: spliced });
             }
         }
 
@@ -370,7 +370,7 @@ export class Queue {
 
         // Emit queueSongRemove event through LavalinkManager
         if (this.eventEmitter) {
-            this.eventEmitter.emit("queueSongRemove", { removed });
+            this.eventEmitter.emit("queueSongRemove", this.eventEmitter.players.get(this.guildId), { removed });
         }
 
         if (typeof this.queueChanges?.tracksRemoved === "function") {
@@ -406,7 +406,7 @@ export class Queue {
 
         // Emit queueClear event through LavalinkManager
         if (this.eventEmitter) {
-            this.eventEmitter.emit("queueClear");
+            this.eventEmitter.emit("queueClear", this.eventEmitter.players.get(this.guildId));
         }
 
         // Log if available

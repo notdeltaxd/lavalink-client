@@ -6,19 +6,19 @@ export interface CustomEvents {
      * Emitted when tracks are added to the queue
      * @event CustomEvents#queueSongAdd
      */
-    "queueSongAdd": (tracks: (Track | UnresolvedTrack)[]) => void;
+    "queueSongAdd": (player: Player, tracks: (Track | UnresolvedTrack)[]) => void;
 
     /**
      * Emitted when tracks are removed from the queue
      * @event CustomEvents#queueSongRemove
      */
-    "queueSongRemove": (removed: { removed: (Track | UnresolvedTrack)[] }) => void;
+    "queueSongRemove": (player: Player, removed: { removed: (Track | UnresolvedTrack)[] }) => void;
 
     /**
      * Emitted when the queue is cleared
      * @event CustomEvents#queueClear
      */
-    "queueClear": () => void;
+    "queueClear": (player: Player) => void;
 
     /**
      * Emitted when the player's position changes significantly (e.g. seeking)
