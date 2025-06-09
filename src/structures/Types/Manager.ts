@@ -6,11 +6,12 @@ import type { DestroyReasonsType, PlayerJson } from "./Player";
 import type { ManagerQueueOptions } from "./Queue";
 import type { Track, UnresolvedTrack } from "./Track";
 import type { GuildShardPayload, SearchPlatform, SponsorBlockChaptersLoaded, SponsorBlockChapterStarted, SponsorBlockSegmentSkipped, SponsorBlockSegmentsLoaded, TrackExceptionEvent, TrackEndEvent, TrackStuckEvent, WebSocketClosedEvent, TrackStartEvent, LyricsFoundEvent, LyricsNotFoundEvent, LyricsLineEvent } from "./Utils";
+import type { CustomEvents } from "../CustomEvents";
 
 /**
  * The events from the lavalink Manager
  */
-export interface LavalinkManagerEvents {
+export interface LavalinkManagerEvents extends CustomEvents {
     /**
      * Emitted when a Track started playing.
      * @event Manager#trackStart

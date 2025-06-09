@@ -89,6 +89,9 @@ export class Player {
     /** Custom data for the player */
     private readonly data: Record<string, unknown> = {};
 
+    private positionTickInterval: ReturnType<typeof setInterval> | null = null;
+    private readonly POSITION_TICK_INTERVAL = 1000; // 1 second intervals
+
     /**
      * Create a new Player
      * @param options
@@ -136,6 +139,28 @@ export class Player {
         if(!dontEmitPlayerCreateEvent) this.LavalinkManager.emit("playerCreate", this);
 
         this.queue = new Queue(this.guildId, {}, new QueueSaver(this.LavalinkManager.options.queueOptions), this.LavalinkManager.options.queueOptions)
+
+        // Start position tick interval if playing
+        if (this.playing) {
+            this.startPositionTick();
+        }
+    }
+
+    private startPositionTick() {
+        if (this.positionTickInterval) return;
+        
+        this.positionTickInterval = setInterval(() => {
+            if (this.playing && this.queue.current) {
+                this.LavalinkManager.emit("playerPositionTick", this, this.position);
+            }
+        }, this.POSITION_TICK_INTERVAL);
+    }
+
+    private stopPositionTick() {
+        if (this.positionTickInterval) {
+            clearInterval(this.positionTickInterval);
+            this.positionTickInterval = null;
+        }
     }
 
     /**
@@ -366,6 +391,11 @@ export class Player {
         });
 
         this.ping.lavalink = Math.round((performance.now() - now) / 10) / 100;
+
+        if (this.playing) {
+            this.startPositionTick();
+        }
+
         return this;
     }
 
@@ -400,6 +430,7 @@ export class Player {
             await this.node.updatePlayer({ guildId: this.guildId, playerOptions: { volume: this.lavalinkVolume } });
         }
         this.ping.lavalink = Math.round((performance.now() - now) / 10) / 100;
+        this.LavalinkManager.emit("playerVolumeUpdate", this, this.volume);
         return this;
     }
     /**
@@ -465,6 +496,7 @@ export class Player {
         this.ping.lavalink = Math.round((performance.now() - now) / 10) / 100;
         // emit the event
         this.LavalinkManager.emit("playerPaused", this, this.queue.current);
+        this.stopPositionTick();
         return this;
     }
 
@@ -479,6 +511,7 @@ export class Player {
         this.ping.lavalink = Math.round((performance.now() - now) / 10) / 100;
         // emit the event
         this.LavalinkManager.emit("playerResumed", this, this.queue.current);
+        this.startPositionTick();
         return this;
     }
 
@@ -503,6 +536,7 @@ export class Player {
         const now = performance.now();
         await this.node.updatePlayer({ guildId: this.guildId, playerOptions: { position } });
         this.ping.lavalink = Math.round((performance.now() - now) / 10) / 100;
+        this.LavalinkManager.emit("playerPositionUpdate", this, position);
 
         return this;
     }
@@ -514,6 +548,7 @@ export class Player {
     async setRepeatMode(repeatMode: RepeatMode) {
         if (!["off", "track", "queue"].includes(repeatMode)) throw new RangeError("Repeatmode must be either 'off', 'track', or 'queue'");
         this.repeatMode = repeatMode;
+        this.LavalinkManager.emit("playerRepeatModeUpdate", this, repeatMode);
         return this;
     }
 
@@ -561,6 +596,8 @@ export class Player {
         await this.node.updatePlayer({ guildId: this.guildId, playerOptions: { track: { encoded: null } } });
 
         this.ping.lavalink = Math.round((performance.now() - now) / 10) / 100;
+
+        this.stopPositionTick();
 
         return this;
     }
@@ -673,6 +710,7 @@ export class Player {
         // emit the event
         this.LavalinkManager.emit("playerDestroy", this, reason);
         // return smt
+        this.stopPositionTick();
         return this;
     }
 
@@ -871,5 +909,46 @@ export class Player {
             ping: this.ping,
             queue: this.queue.utils.toJSON(),
         } as PlayerJson
+    }
+
+    /**
+     * Add a track to the queue
+     */
+    public async addTrack(track: Track) {
+        this.queue.add(track);
+        await this.queue.utils.save();
+        this.LavalinkManager.emit("queueSongAdd", this, track);
+        return this;
+    }
+
+    /**
+     * Remove a track from the queue
+     */
+    public async removeTrack(track: Track) {
+        const index = this.queue.tracks.findIndex(t => t.info.identifier === track.info.identifier);
+        if (index !== -1) {
+            this.queue.tracks.splice(index, 1);
+            await this.queue.utils.save();
+            this.LavalinkManager.emit("queueSongRemove", this, track);
+        }
+        return this;
+    }
+
+    /**
+     * Clear the queue
+     */
+    public async clearQueue() {
+        await this.queue.splice(0, this.queue.tracks.length);
+        this.LavalinkManager.emit("queueClear", this);
+        return this;
+    }
+
+    /**
+     * Set autoplay state
+     */
+    public setAutoplay(enabled: boolean) {
+        this.set("autoplay", enabled);
+        this.LavalinkManager.emit("playerAutoplayUpdate", this, enabled);
+        return this;
     }
 }
