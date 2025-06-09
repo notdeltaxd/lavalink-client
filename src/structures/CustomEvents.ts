@@ -1,24 +1,24 @@
-import { Player } from "./Player";
-import { Track } from "./Types/Track";
+import type { Player } from "./Player";
+import type { Track, UnresolvedTrack } from "./Types/Track";
 
 export interface CustomEvents {
     /**
-     * Emitted when a track is added to the queue
+     * Emitted when tracks are added to the queue
      * @event CustomEvents#queueSongAdd
      */
-    "queueSongAdd": (player: Player, track: Track) => void;
+    "queueSongAdd": (tracks: (Track | UnresolvedTrack)[]) => void;
 
     /**
-     * Emitted when a track is removed from the queue
+     * Emitted when tracks are removed from the queue
      * @event CustomEvents#queueSongRemove
      */
-    "queueSongRemove": (player: Player, track: Track) => void;
+    "queueSongRemove": (removed: { removed: (Track | UnresolvedTrack)[] }) => void;
 
     /**
      * Emitted when the queue is cleared
      * @event CustomEvents#queueClear
      */
-    "queueClear": (player: Player) => void;
+    "queueClear": () => void;
 
     /**
      * Emitted when the player's position changes significantly (e.g. seeking)

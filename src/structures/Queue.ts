@@ -4,6 +4,7 @@ import type { Track, UnresolvedTrack } from "./Types/Track";
 import type {
     ManagerQueueOptions, QueueChangesWatcher, QueueStoreManager, StoredQueue
 } from "./Types/Queue";
+import type { LavalinkManager } from "./LavalinkManager";
 
 export class QueueSaver {
     /**
@@ -121,6 +122,7 @@ export class Queue {
     private readonly QueueSaver: QueueSaver | null = null;
     private managerUtils = new ManagerUtils();
     private queueChanges: QueueChangesWatcher | null;
+    private eventEmitter: LavalinkManager | null = null;
 
     /**
      * Create a new Queue
@@ -130,10 +132,11 @@ export class Queue {
      * @param queueOptions
      */
     constructor(guildId: string, data: Partial<StoredQueue> = {}, QueueSaver?: QueueSaver, queueOptions?: ManagerQueueOptions) {
-        this.queueChanges = queueOptions.queueChangesWatcher || null;
+        this.queueChanges = queueOptions?.queueChangesWatcher || null;
         this.guildId = guildId;
         this.QueueSaver = QueueSaver;
         this.options.maxPreviousTracks = this.QueueSaver?.options?.maxPreviousTracks ?? this.options.maxPreviousTracks;
+        this.eventEmitter = queueOptions?.eventEmitter;
 
         this.current = this.managerUtils.isTrack(data.current) ? data.current : null;
         this.previous = Array.isArray(data.previous) && data.previous.some(track => this.managerUtils.isTrack(track) || this.managerUtils.isUnresolvedTrack(track)) ? data.previous.filter(track => this.managerUtils.isTrack(track) || this.managerUtils.isUnresolvedTrack(track)) : [];
@@ -234,14 +237,17 @@ export class Queue {
         }
 
         const oldStored = typeof this.queueChanges?.tracksAdd === "function" ? this.utils.toJSON() : null;
-        // add the track(s)
-        this.tracks.push(...(Array.isArray(TrackOrTracks) ? TrackOrTracks : [TrackOrTracks]).flat(2).filter(v => this.managerUtils.isTrack(v) || this.managerUtils.isUnresolvedTrack(v)));
-        // log if available
-        if (typeof this.queueChanges?.tracksAdd === "function") try { this.queueChanges.tracksAdd(this.guildId, (Array.isArray(TrackOrTracks) ? TrackOrTracks : [TrackOrTracks]).flat(2).filter(v => this.managerUtils.isTrack(v) || this.managerUtils.isUnresolvedTrack(v)), this.tracks.length, oldStored, this.utils.toJSON()); } catch { /*  */ }
+        const tracksToAdd = (Array.isArray(TrackOrTracks) ? TrackOrTracks : [TrackOrTracks]).flat(2).filter(v => this.managerUtils.isTrack(v) || this.managerUtils.isUnresolvedTrack(v));
+        this.tracks.push(...tracksToAdd);
 
-        // save the queue
+        // Emit queueSongAdd event through LavalinkManager
+        if (this.eventEmitter) {
+            this.eventEmitter.emit("queueSongAdd", tracksToAdd);
+        }
+
+        if (typeof this.queueChanges?.tracksAdd === "function") try { this.queueChanges.tracksAdd(this.guildId, tracksToAdd, this.tracks.length, oldStored, this.utils.toJSON()); } catch { /*  */ }
+
         await this.utils.save();
-        // return the amount of the tracks
         return this.tracks.length;
     }
 
@@ -254,22 +260,30 @@ export class Queue {
      */
     public async splice(index: number, amount: number, TrackOrTracks?: Track | UnresolvedTrack | (Track | UnresolvedTrack)[]) {
         const oldStored = typeof this.queueChanges?.tracksAdd === "function" || typeof this.queueChanges?.tracksRemoved === "function" ? this.utils.toJSON() : null;
-        // if no tracks to splice, add the tracks
+        
         if (!this.tracks.length) {
             if (TrackOrTracks) return await this.add(TrackOrTracks);
-            return null
+            return null;
         }
-        // Log if available
-        if ((TrackOrTracks) && typeof this.queueChanges?.tracksAdd === "function") try { this.queueChanges.tracksAdd(this.guildId, (Array.isArray(TrackOrTracks) ? TrackOrTracks : [TrackOrTracks]).flat(2).filter(v => this.managerUtils.isTrack(v) || this.managerUtils.isUnresolvedTrack(v)), index, oldStored, this.utils.toJSON()); } catch { /*  */ }
-        // remove the tracks (and add the new ones)
+
         let spliced = TrackOrTracks ? this.tracks.splice(index, amount, ...(Array.isArray(TrackOrTracks) ? TrackOrTracks : [TrackOrTracks]).flat(2).filter(v => this.managerUtils.isTrack(v) || this.managerUtils.isUnresolvedTrack(v))) : this.tracks.splice(index, amount);
-        // get the spliced array
         spliced = (Array.isArray(spliced) ? spliced : [spliced]);
-        // Log if available
+
+        // Emit events based on operation
+        if (this.eventEmitter) {
+            if (TrackOrTracks) {
+                const tracksToAdd = (Array.isArray(TrackOrTracks) ? TrackOrTracks : [TrackOrTracks]).flat(2).filter(v => this.managerUtils.isTrack(v) || this.managerUtils.isUnresolvedTrack(v));
+                this.eventEmitter.emit("queueSongAdd", tracksToAdd);
+            }
+            if (spliced.length > 0) {
+                this.eventEmitter.emit("queueSongRemove", { removed: spliced });
+            }
+        }
+
+        if ((TrackOrTracks) && typeof this.queueChanges?.tracksAdd === "function") try { this.queueChanges.tracksAdd(this.guildId, (Array.isArray(TrackOrTracks) ? TrackOrTracks : [TrackOrTracks]).flat(2).filter(v => this.managerUtils.isTrack(v) || this.managerUtils.isUnresolvedTrack(v)), index, oldStored, this.utils.toJSON()); } catch { /*  */ }
         if (typeof this.queueChanges?.tracksRemoved === "function") try { this.queueChanges.tracksRemoved(this.guildId, spliced, index, oldStored, this.utils.toJSON()) } catch { /* */ }
-        // save the queue
+
         await this.utils.save();
-        // return the things
         return spliced.length === 1 ? spliced[0] : spliced;
     }
 
@@ -306,83 +320,104 @@ export class Queue {
      */
     public async remove<T extends Track | UnresolvedTrack | number | Track[] | UnresolvedTrack[] | number[] | (number | Track | UnresolvedTrack)[]>(removeQueryTrack: T): Promise<{ removed: (Track | UnresolvedTrack)[] } | null> {
         const oldStored = typeof this.queueChanges?.tracksRemoved === "function" ? this.utils.toJSON() : null;
+        let removed: (Track | UnresolvedTrack)[] = [];
+
         if (typeof removeQueryTrack === "number") {
             const toRemove = this.tracks[removeQueryTrack];
             if (!toRemove) return null;
-
-            const removed = this.tracks.splice(removeQueryTrack, 1);
-            // Log if available
-            if (typeof this.queueChanges?.tracksRemoved === "function") try { this.queueChanges.tracksRemoved(this.guildId, removed, removeQueryTrack, oldStored, this.utils.toJSON()) } catch { /* */ }
-
-            await this.utils.save();
-
-            return { removed }
-        }
-
-        if (Array.isArray(removeQueryTrack)) {
+            removed = this.tracks.splice(removeQueryTrack, 1);
+        } else if (Array.isArray(removeQueryTrack)) {
             if (removeQueryTrack.every(v => typeof v === "number")) {
-                const removed = [];
                 for (const i of removeQueryTrack) {
                     if (this.tracks[i]) {
                         removed.push(...this.tracks.splice(i, 1))
                     }
                 }
-                if (!removed.length) return null;
+            } else {
+                const tracksToRemove = this.tracks.map((v, i) => ({ v, i })).filter(({ v, i }) => removeQueryTrack.find(t =>
+                    typeof t === "number" && (t === i) ||
+                    typeof t === "object" && (
+                        t.encoded && t.encoded === v.encoded ||
+                        t.info?.identifier && t.info.identifier === v.info?.identifier ||
+                        t.info?.uri && t.info.uri === v.info?.uri ||
+                        t.info?.title && t.info.title === v.info?.title ||
+                        t.info?.isrc && t.info.isrc === v.info?.isrc ||
+                        t.info?.artworkUrl && t.info.artworkUrl === v.info?.artworkUrl
+                    )
+                ));
 
-                // Log if available
-                if (typeof this.queueChanges?.tracksRemoved === "function") try { this.queueChanges.tracksRemoved(this.guildId, removed, removeQueryTrack as number[], oldStored, this.utils.toJSON()) } catch { /* */ }
-
-                await this.utils.save();
-
-                return { removed };
-            }
-
-            const tracksToRemove = this.tracks.map((v, i) => ({ v, i })).filter(({ v, i }) => removeQueryTrack.find(t =>
-                typeof t === "number" && (t === i) ||
-                typeof t === "object" && (
-                    t.encoded && t.encoded === v.encoded ||
-                    t.info?.identifier && t.info.identifier === v.info?.identifier ||
-                    t.info?.uri && t.info.uri === v.info?.uri ||
-                    t.info?.title && t.info.title === v.info?.title ||
-                    t.info?.isrc && t.info.isrc === v.info?.isrc ||
-                    t.info?.artworkUrl && t.info.artworkUrl === v.info?.artworkUrl
-                )
-            ));
-
-            if (!tracksToRemove.length) return null;
-
-            const removed = [];
-
-            for (const { i } of tracksToRemove) {
-                if (this.tracks[i]) {
-                    removed.push(...this.tracks.splice(i, 1))
+                for (const { i } of tracksToRemove) {
+                    if (this.tracks[i]) {
+                        removed.push(...this.tracks.splice(i, 1))
+                    }
                 }
             }
-            // Log if available
-            if (typeof this.queueChanges?.tracksRemoved === "function") try { this.queueChanges.tracksRemoved(this.guildId, removed, tracksToRemove.map(v => v.i), oldStored, this.utils.toJSON()) } catch { /* */ }
+        } else {
+            const toRemove = this.tracks.findIndex((v) =>
+                removeQueryTrack.encoded && removeQueryTrack.encoded === v.encoded ||
+                removeQueryTrack.info?.identifier && removeQueryTrack.info.identifier === v.info?.identifier ||
+                removeQueryTrack.info?.uri && removeQueryTrack.info.uri === v.info?.uri ||
+                removeQueryTrack.info?.title && removeQueryTrack.info.title === v.info?.title ||
+                removeQueryTrack.info?.isrc && removeQueryTrack.info.isrc === v.info?.isrc ||
+                removeQueryTrack.info?.artworkUrl && removeQueryTrack.info.artworkUrl === v.info?.artworkUrl
+            );
 
-            await this.utils.save();
-
-            return { removed };
+            if (toRemove < 0) return null;
+            removed = this.tracks.splice(toRemove, 1);
         }
-        const toRemove = this.tracks.findIndex((v) =>
-            removeQueryTrack.encoded && removeQueryTrack.encoded === v.encoded ||
-            removeQueryTrack.info?.identifier && removeQueryTrack.info.identifier === v.info?.identifier ||
-            removeQueryTrack.info?.uri && removeQueryTrack.info.uri === v.info?.uri ||
-            removeQueryTrack.info?.title && removeQueryTrack.info.title === v.info?.title ||
-            removeQueryTrack.info?.isrc && removeQueryTrack.info.isrc === v.info?.isrc ||
-            removeQueryTrack.info?.artworkUrl && removeQueryTrack.info.artworkUrl === v.info?.artworkUrl
-        );
 
-        if (toRemove < 0) return null;
+        if (!removed.length) return null;
 
-        const removed = this.tracks.splice(toRemove, 1);
-        // Log if available
-        if (typeof this.queueChanges?.tracksRemoved === "function") try { this.queueChanges.tracksRemoved(this.guildId, removed, toRemove, oldStored, this.utils.toJSON()) } catch { /* */ }
+        // Emit queueSongRemove event through LavalinkManager
+        if (this.eventEmitter) {
+            this.eventEmitter.emit("queueSongRemove", { removed });
+        }
+
+        if (typeof this.queueChanges?.tracksRemoved === "function") {
+            let indices: number[] = [];
+            if (Array.isArray(removeQueryTrack)) {
+                indices = removeQueryTrack.map(t => typeof t === "number" ? t : -1).filter(i => i !== -1);
+            } else if (typeof removeQueryTrack === "number") {
+                indices = [removeQueryTrack];
+            }
+            try { 
+                this.queueChanges.tracksRemoved(this.guildId, removed, indices, oldStored, this.utils.toJSON()) 
+            } catch { /* */ }
+        }
 
         await this.utils.save();
-
         return { removed };
+    }
+
+    /**
+     * Clear all tracks from the queue
+     * @returns {boolean} Whether the queue was cleared
+     */
+    public async clear(): Promise<boolean> {
+        const oldStored = typeof this.queueChanges?.tracksRemoved === "function" ? this.utils.toJSON() : null;
+        
+        if (this.tracks.length === 0) return false;
+
+        // Store tracks before clearing for event
+        const removedTracks = [...this.tracks];
+        
+        // Clear the tracks array
+        this.tracks.length = 0;
+
+        // Emit queueClear event through LavalinkManager
+        if (this.eventEmitter) {
+            this.eventEmitter.emit("queueClear");
+        }
+
+        // Log if available
+        if (typeof this.queueChanges?.tracksRemoved === "function") {
+            try {
+                this.queueChanges.tracksRemoved(this.guildId, removedTracks, [], oldStored, this.utils.toJSON());
+            } catch { /* */ }
+        }
+
+        await this.utils.save();
+        return true;
     }
 
     /**

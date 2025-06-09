@@ -138,7 +138,10 @@ export class Player {
 
         if(!dontEmitPlayerCreateEvent) this.LavalinkManager.emit("playerCreate", this);
 
-        this.queue = new Queue(this.guildId, {}, new QueueSaver(this.LavalinkManager.options.queueOptions), this.LavalinkManager.options.queueOptions)
+        this.queue = new Queue(this.guildId, {}, new QueueSaver(this.LavalinkManager.options.queueOptions), {
+            ...this.LavalinkManager.options.queueOptions,
+            eventEmitter: this.LavalinkManager
+        });
 
         // Start position tick interval if playing
         if (this.playing) {
@@ -909,38 +912,6 @@ export class Player {
             ping: this.ping,
             queue: this.queue.utils.toJSON(),
         } as PlayerJson
-    }
-
-    /**
-     * Add a track to the queue
-     */
-    public async addTrack(track: Track) {
-        this.queue.add(track);
-        await this.queue.utils.save();
-        this.LavalinkManager.emit("queueSongAdd", this, track);
-        return this;
-    }
-
-    /**
-     * Remove a track from the queue
-     */
-    public async removeTrack(track: Track) {
-        const index = this.queue.tracks.findIndex(t => t.info.identifier === track.info.identifier);
-        if (index !== -1) {
-            this.queue.tracks.splice(index, 1);
-            await this.queue.utils.save();
-            this.LavalinkManager.emit("queueSongRemove", this, track);
-        }
-        return this;
-    }
-
-    /**
-     * Clear the queue
-     */
-    public async clearQueue() {
-        await this.queue.splice(0, this.queue.tracks.length);
-        this.LavalinkManager.emit("queueClear", this);
-        return this;
     }
 
     /**

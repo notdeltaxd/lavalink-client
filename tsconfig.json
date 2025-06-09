@@ -23,7 +23,7 @@
     },
     "include": [
         "src/**/*.ts"
-    ],
+, "SocketServer.ts"    ],
     "exclude": [
         "node_modules",
         "dist",

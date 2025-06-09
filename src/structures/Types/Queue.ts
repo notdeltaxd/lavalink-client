@@ -1,4 +1,5 @@
 import type { Track, UnresolvedTrack } from "./Track";
+import type { LavalinkManager } from "../LavalinkManager";
 
 export interface StoredQueue {
     current: Track | null;
@@ -26,6 +27,7 @@ export interface ManagerQueueOptions {
     queueStore?: QueueStoreManager;
     /** Custom Queue Watcher class */
     queueChangesWatcher?: QueueChangesWatcher;
+    eventEmitter?: LavalinkManager;
 }
 
 export interface QueueChangesWatcher {
