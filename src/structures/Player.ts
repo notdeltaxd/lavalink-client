@@ -827,7 +827,7 @@ export class Player {
     }
 
     /**
-     * Selects the best platform for autoplay based on enabled sources
+     * Selects a random platform for autoplay based on enabled sources
      * @param enabledSources Array of enabled source managers  
      * @returns string|null The selected platform search prefix or null
      */
@@ -840,19 +840,24 @@ export class Player {
             amazonmusic: "amznmsearch",
             youtube: "ytmsearch",
             soundcloud: "scsearch",
-            yandexmusic: "ymsearch",
             tidal: "tdsearch",
-            qobuz: "qbsearch"
+            qobuz: "qbsearch",
+            jiosaavn: "jssearch"
         };
 
-        // Find the first enabled source that we support
+        // Collect all enabled sources that we support
+        const availableSources: string[] = [];
         for (const enabledSource of enabledSources) {
             if (platformMap[enabledSource]) {
-                return platformMap[enabledSource];
+                availableSources.push(platformMap[enabledSource]);
             }
         }
 
-        return null;
+        // Return random source if any available
+        if (availableSources.length === 0) return null;
+        
+        const randomIndex = Math.floor(Math.random() * availableSources.length);
+        return availableSources[randomIndex];
     }
 
     /**
