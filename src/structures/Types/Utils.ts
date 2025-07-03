@@ -18,6 +18,7 @@ export type LavaSrcSearchPlatformBase =
     "spsearch" |
     "sprec" |
     "amsearch" |
+    "amznmsearch" |
     "dzsearch" |
     "dzisrc" |
     "dzrec" |
@@ -61,6 +62,7 @@ export type ClientSearchPlatform =
     "youtube music" | "youtubemusic" | "ytm" | "musicyoutube" | "music youtube" |
     "soundcloud" | "sc" |
     "am" | "apple music" | "applemusic" | "apple" | "musicapple" | "music apple" |
+    "amzn" | "amazon music" | "amazonmusic" | "amazon" | "musicamazon" | "music amazon" |
     "sp" | "spsuggestion" | "spotify" | "spotify.com" | "spotifycom" |
     "dz" | "deezer" |
     "yandex" | "yandex music" | "yandexmusic" | "vk" | "vk music" | "vkmusic" | "tidal" | "tidal music" | "qobuz" |
@@ -102,6 +104,7 @@ export type SourcesRegex = "YoutubeRegex" |
     "bandcamp" |
     "jiosaavn" |
     "appleMusic" |
+    "amazonMusic" |
     "tidal" |
     "TwitchTv" |
     "vimeo";

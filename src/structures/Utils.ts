@@ -298,6 +298,9 @@ export class ManagerUtils {
         if (SourceLinksRegexes.appleMusic.test(queryString) && !node.info?.sourceManagers?.includes("applemusic")) {
             throw new Error("Query / Link Provided for this Source but Lavalink Node has not 'applemusic' enabled");
         }
+        if (SourceLinksRegexes.amazonMusic.test(queryString) && !node.info?.sourceManagers?.includes("amazonmusic")) {
+            throw new Error("Query / Link Provided for this Source but Lavalink Node has not 'amazonmusic' enabled");
+        }
         if (SourceLinksRegexes.AllDeezerRegex.test(queryString) && !node.info?.sourceManagers?.includes("deezer")) {
             throw new Error("Query / Link Provided for this Source but Lavalink Node has not 'deezer' enabled");
         }
@@ -355,6 +358,9 @@ export class ManagerUtils {
 
         if (source === "amsearch" && !node.info?.sourceManagers?.includes("applemusic")) {
             throw new Error("Lavalink Node has not 'applemusic' enabled, which is required to have 'amsearch' work");
+        }
+        if (source === "amznmsearch" && !node.info?.sourceManagers?.includes("amazonmusic")) {
+            throw new Error("Lavalink Node has not 'amazonmusic' enabled, which is required to have 'amznmsearch' work");
         }
         if (source === "dzisrc" && !node.info?.sourceManagers?.includes("deezer")) {
             throw new Error("Lavalink Node has not 'deezer' enabled, which is required to have 'dzisrc' work");
