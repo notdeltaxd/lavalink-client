@@ -635,7 +635,7 @@ export class Player {
             throw new RangeError("Track must be a valid Track object");
         }
 
-        const node = this.LavalinkManager.nodeManager.leastUsedNodes[0];
+        const node = this.node;
         if (!node) {
             throw new Error("No available nodes");
         }
@@ -643,6 +643,14 @@ export class Player {
         // Check if the manager has a lastFmApiKey option
         const apiKey = this.LavalinkManager.options?.playerOptions?.lastFmApiKey;
         const enabledSources = node.info?.sourceManagers || [];
+
+        if (this.LavalinkManager.options?.advancedOptions?.enableDebugEvents) {
+            this.LavalinkManager.emit("debug", DebugEvents.AutoplayExecution, {
+                state: "log",
+                message: `Getting recommendations - API Key: ${!!apiKey}, Sources: ${enabledSources.join(', ')}, Track: ${track.info.title} by ${track.info.author}`,
+                functionLayer: "Player > getRecommendedTracks() > start",
+            });
+        }
 
         // Use YouTube-based autoplay if no API key or YouTube is available
         if (!apiKey && enabledSources.includes("youtube")) {
@@ -666,11 +674,26 @@ export class Player {
      * @returns Promise<Track[]> Array of recommended tracks
      */
     private async handleYouTubeRecommendations(track: Track): Promise<Track[]> {
+        if (this.LavalinkManager.options?.advancedOptions?.enableDebugEvents) {
+            this.LavalinkManager.emit("debug", DebugEvents.AutoplayExecution, {
+                state: "log",
+                message: `Trying YouTube recommendations for: ${track.info.title} by ${track.info.author}`,
+                functionLayer: "Player > handleYouTubeRecommendations() > start",
+            });
+        }
+
         const hasYouTubeURL = ["youtube.com", "youtu.be"].some((url) => track.info.uri.includes(url));
         
         let videoID: string | null = null;
         if (hasYouTubeURL) {
             videoID = track.info.uri.split("=").pop() || null;
+            if (this.LavalinkManager.options?.advancedOptions?.enableDebugEvents) {
+                this.LavalinkManager.emit("debug", DebugEvents.AutoplayExecution, {
+                    state: "log",
+                    message: `Found YouTube URL, extracted video ID: ${videoID}`,
+                    functionLayer: "Player > handleYouTubeRecommendations() > extractId",
+                });
+            }
         } else {
             const searchResult = await this.node.search({ 
                 query: `${track.info.author} - ${track.info.title}`, 
