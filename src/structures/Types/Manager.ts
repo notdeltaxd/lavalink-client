@@ -224,8 +224,9 @@ export interface ManagerPlayerOptions {
         /** Instantly destroy player (overrides autoReconnect) | Don't provide == disable feature*/
         destroyPlayer?: boolean;
     };
-    /** Minimum time to play the song before autoPlayFunction is executed (prevents error spamming) Set to 0 to disable it @default 10000 */
-    minAutoPlayMs?: number;
+
+    /** Last.fm API key for autoplay recommendations */
+    lastFmApiKey?: string;
     /** Allows you to declare how many tracks are allowed to error/stuck within a time-frame before player is destroyed @default "{threshold: 35000, maxAmount: 3 }" */
     maxErrorsPerTime?: {
         /** The threshold time to count errors (recommended is 35s) */
@@ -235,8 +236,6 @@ export interface ManagerPlayerOptions {
     };
     /* What the Player should do, when the queue gets empty */
     onEmptyQueue?: {
-        /** Get's executed onEmptyQueue -> You can do any track queue previous transformations, if you add a track to the queue -> it will play it, if not queueEnd will execute! */
-        autoPlayFunction?: (player: Player, lastPlayedTrack: Track) => Promise<void>;
         /* aut. destroy the player after x ms, if 1 it instantly destroys, don't provide or set to 0 to not destroy the player */
         destroyAfterMs?: number;
     };

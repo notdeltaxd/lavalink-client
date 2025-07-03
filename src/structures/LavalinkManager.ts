@@ -97,13 +97,12 @@ export class LavalinkManager extends EventEmitter {
                     autoReconnectOnlyWithTracks: options?.playerOptions?.onDisconnect?.autoReconnectOnlyWithTracks ?? false,
                 },
                 onEmptyQueue: {
-                    autoPlayFunction: options?.playerOptions?.onEmptyQueue?.autoPlayFunction ?? null,
                     destroyAfterMs: options?.playerOptions?.onEmptyQueue?.destroyAfterMs ?? undefined
                 },
                 volumeDecrementer: options?.playerOptions?.volumeDecrementer ?? 1,
                 requesterTransformer: options?.playerOptions?.requesterTransformer ?? null,
                 useUnresolvedData: options?.playerOptions?.useUnresolvedData ?? false,
-                minAutoPlayMs: options?.playerOptions?.minAutoPlayMs ?? 10_000,
+
                 maxErrorsPerTime: {
                     threshold: options?.playerOptions?.maxErrorsPerTime?.threshold ?? 35_000,
                     maxAmount: options?.playerOptions?.maxErrorsPerTime?.maxAmount ?? 3
