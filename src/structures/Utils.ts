@@ -506,6 +506,15 @@ export async function queueTrackEnd(player: Player, dontShiftQueue: boolean = fa
 
     // and if repeatMode == queue, add it back to the queue!
     if (player.repeatMode === "queue" && player.queue.current) player.queue.tracks.push(player.queue.current)
+    
+    // if repeatMode == dynamic, add it back to the queue and shuffle after each song
+    if (player.repeatMode === "dynamic" && player.queue.current) {
+        player.queue.tracks.push(player.queue.current);
+        // shuffle the queue for dynamic repeat
+        if (player.queue.tracks.length > 1) {
+            await player.queue.shuffle();
+        }
+    }
     // change the current Track to the next upcoming one
     const nextSong = dontShiftQueue ? null : player.queue.tracks.shift() as Track;
 

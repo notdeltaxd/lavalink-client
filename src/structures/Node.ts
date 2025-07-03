@@ -1305,7 +1305,10 @@ export class LavalinkNode {
             return;
         }
         // If there are no songs in the queue
-        if (!player.queue.tracks.length && (player.repeatMode === "off" || player.get("internal_stopPlaying"))) return this.queueEnd(player, track, payload);
+        // If there are no songs in the queue and not in dynamic repeat mode
+        if (!player.queue.tracks.length && (player.repeatMode === "off" || player.get("internal_stopPlaying")) && player.repeatMode !== "dynamic") return this.queueEnd(player, track, payload);
+        // If dynamic repeat mode but no tracks and autoplay is enabled, still end queue to trigger autoplay
+        if (!player.queue.tracks.length && player.repeatMode === "dynamic" && player.isAutoplay) return this.queueEnd(player, track, payload);
         // If a track had an error while starting
         if (["loadFailed", "cleanup"].includes(payload.reason)) {
             //Dont add tracks if the player is already destroying.
@@ -1360,7 +1363,7 @@ export class LavalinkNode {
         }
         this.NodeManager.LavalinkManager.emit("trackStuck", player, track || this.getTrackOfPayload(payload), payload);
         // If there are no songs in the queue
-        if (!player.queue.tracks.length && (player.repeatMode === "off" || player.get("internal_stopPlaying"))) {
+        if (!player.queue.tracks.length && (player.repeatMode === "off" || player.get("internal_stopPlaying")) && player.repeatMode !== "dynamic") {
             try { //Sometimes the trackStuck event triggers from the Lavalink server, but the track continues playing or resumes after. We explicitly end the track in such cases
                 await player.node.updatePlayer({ guildId: player.guildId, playerOptions: { track: { encoded: null } } });  //trackEnd -> queueEnd
                 return;
@@ -1537,40 +1540,30 @@ export class LavalinkNode {
             });
         }
 
-        if (typeof this.NodeManager.LavalinkManager.options?.playerOptions?.onEmptyQueue?.autoPlayFunction === "function" && typeof player.get("internal_autoplayStopPlaying") === "undefined") {
+        // Built-in autoplay system
+        if (player.isAutoplay && typeof player.get("internal_autoplayStopPlaying") === "undefined") {
             if (this.NodeManager.LavalinkManager.options?.advancedOptions?.enableDebugEvents) {
                 this.NodeManager.LavalinkManager.emit("debug", DebugEvents.AutoplayExecution, {
                     state: "log",
-                    message: `Now Triggering Autoplay.`,
-                    functionLayer: "LavalinkNode > queueEnd() > autoplayFunction",
+                    message: `Executing built-in autoplay for player in guild: ${player.guildId}`,
+                    functionLayer: "LavalinkNode > queueEnd() > autoplay",
                 });
             }
 
-            const previousAutoplayTime = player.get("internal_previousautoplay") as number;
-            const duration = previousAutoplayTime ? Date.now() - previousAutoplayTime : 0;
-            if (!duration || duration > this.NodeManager.LavalinkManager.options.playerOptions.minAutoPlayMs || !!player.get("internal_skipped")) {
-                await this.NodeManager.LavalinkManager.options?.playerOptions?.onEmptyQueue?.autoPlayFunction(player, track);
-                player.set("internal_previousautoplay", Date.now());
-                if (player.queue.tracks.length > 0) await queueTrackEnd(player);
-                else if (this.NodeManager.LavalinkManager.options?.advancedOptions?.enableDebugEvents) {
-                    this.NodeManager.LavalinkManager.emit("debug", DebugEvents.AutoplayNoSongsAdded, {
-                        state: "warn",
-                        message: `Autoplay was triggered but no songs were added to the queue.`,
-                        functionLayer: "LavalinkNode > queueEnd() > autoplayFunction",
-                    });
-                }
+            await player.executeAutoplay(track);
+            
+            if (player.queue.tracks.length > 0) {
+                await queueTrackEnd(player);
                 if (player.queue.current) {
                     if (payload.type === "TrackEndEvent") this.NodeManager.LavalinkManager.emit("trackEnd", player, track, payload);
                     if (this.NodeManager.LavalinkManager.options.autoSkip) return player.play({ noReplace: true, paused: false });
                 }
-            } else {
-                if (this.NodeManager.LavalinkManager.options?.advancedOptions?.enableDebugEvents) {
-                    this.NodeManager.LavalinkManager.emit("debug", DebugEvents.AutoplayThresholdSpamLimiter, {
-                        state: "warn",
-                        message: `Autoplay was triggered after the previousautoplay too early. Threshold is: ${this.NodeManager.LavalinkManager.options.playerOptions.minAutoPlayMs}ms and the Duration was ${duration}ms`,
-                        functionLayer: "LavalinkNode > queueEnd() > autoplayFunction",
-                    });
-                }
+            } else if (this.NodeManager.LavalinkManager.options?.advancedOptions?.enableDebugEvents) {
+                this.NodeManager.LavalinkManager.emit("debug", DebugEvents.AutoplayNoSongsAdded, {
+                    state: "warn",
+                    message: `Autoplay executed but no tracks were added to queue in guild: ${player.guildId}`,
+                    functionLayer: "LavalinkNode > queueEnd() > autoplay",
+                });
             }
         }
 
