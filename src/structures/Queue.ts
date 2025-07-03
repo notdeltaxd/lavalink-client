@@ -223,6 +223,118 @@ export class Queue {
     }
 
     /**
+     * Clears all tracks from the queue
+     * @returns {Promise<number>} Number of tracks that were removed
+     */
+    public async clear(): Promise<number> {
+        const oldStored = typeof this.queueChanges?.tracksRemoved === "function" ? this.utils.toJSON() : null;
+        const removedTracks = [...this.tracks];
+        const removedCount = this.tracks.length;
+
+        // Clear all tracks
+        this.tracks.splice(0, this.tracks.length);
+
+        // Fire queueChanges event if watcher exists
+        if (typeof this.queueChanges?.tracksRemoved === "function") {
+            try { 
+                this.queueChanges.tracksRemoved(this.guildId, removedTracks, 0, oldStored, this.utils.toJSON()); 
+            } catch { /* ignore errors */ }
+        }
+
+        await this.utils.save();
+        return removedCount;
+    }
+
+    /**
+     * Shuffles the queue by user blocks - plays all tracks from one user before moving to next user
+     * @returns {Promise<number>} Number of tracks in the queue
+     */
+    public async userBlockShuffle(): Promise<number> {
+        const oldStored = typeof this.queueChanges?.shuffled === "function" ? this.utils.toJSON() : null;
+
+        if (this.tracks.length <= 1) return this.tracks.length;
+
+        // Group tracks by requester
+        const userTracks = new Map<unknown, (Track | UnresolvedTrack)[]>();
+        this.tracks.forEach((track) => {
+            const requester = track.requester;
+            if (!userTracks.has(requester)) {
+                userTracks.set(requester, []);
+            }
+            userTracks.get(requester)!.push(track);
+        });
+
+        // Create shuffled queue with user blocks
+        const shuffledTracks: (Track | UnresolvedTrack)[] = [];
+        userTracks.forEach((tracks) => {
+            shuffledTracks.push(...tracks);
+        });
+
+        // Replace current tracks with shuffled tracks
+        this.tracks.splice(0, this.tracks.length, ...shuffledTracks);
+
+        // Fire queueChanges event if watcher exists
+        if (typeof this.queueChanges?.shuffled === "function") {
+            this.queueChanges.shuffled(this.guildId, oldStored, this.utils.toJSON());
+        }
+
+        await this.utils.save();
+        return this.tracks.length;
+    }
+
+    /**
+     * Shuffles the queue in round-robin fashion - alternates one track from each user
+     * @returns {Promise<number>} Number of tracks in the queue
+     */
+    public async roundRobinShuffle(): Promise<number> {
+        const oldStored = typeof this.queueChanges?.shuffled === "function" ? this.utils.toJSON() : null;
+
+        if (this.tracks.length <= 1) return this.tracks.length;
+
+        // Group tracks by requester
+        const userTracks = new Map<unknown, (Track | UnresolvedTrack)[]>();
+        this.tracks.forEach((track) => {
+            const requester = track.requester;
+            if (!userTracks.has(requester)) {
+                userTracks.set(requester, []);
+            }
+            userTracks.get(requester)!.push(track);
+        });
+
+        // Shuffle each user's tracks first
+        userTracks.forEach((tracks) => {
+            for (let i = tracks.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [tracks[i], tracks[j]] = [tracks[j], tracks[i]];
+            }
+        });
+
+        // Create round-robin shuffled queue
+        const shuffledTracks: (Track | UnresolvedTrack)[] = [];
+        const userQueues = Array.from(userTracks.values());
+
+        // Round-robin distribution
+        while (userQueues.some(queue => queue.length > 0)) {
+            for (const queue of userQueues) {
+                if (queue.length > 0) {
+                    shuffledTracks.push(queue.shift()!);
+                }
+            }
+        }
+
+        // Replace current tracks with shuffled tracks
+        this.tracks.splice(0, this.tracks.length, ...shuffledTracks);
+
+        // Fire queueChanges event if watcher exists
+        if (typeof this.queueChanges?.shuffled === "function") {
+            this.queueChanges.shuffled(this.guildId, oldStored, this.utils.toJSON());
+        }
+
+        await this.utils.save();
+        return this.tracks.length;
+    }
+
+    /**
      * Add a Track to the Queue, and after saved in the "db" it returns the amount of the Tracks
      * @param {Track | Track[]} TrackOrTracks
      * @param {number} index At what position to add the Track
