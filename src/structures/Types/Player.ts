@@ -32,6 +32,10 @@ export interface PlayerJson {
     lavalinkVolume: number;
     /** The repeatmode from the player */
     repeatMode: RepeatMode;
+    /** Whether autoplay is enabled */
+    isAutoplay: boolean;
+    /** Number of autoplay tries */
+    autoplayTries: number | null;
     /** Pause state */
     paused: boolean;
     /** Wether the player was playing or not */
@@ -57,7 +61,7 @@ export interface PlayerJson {
     queue?: StoredQueue;
 }
 
-export type RepeatMode = "queue" | "track" | "off";
+export type RepeatMode = "queue" | "track" | "dynamic" | "off"; // Dynamic Repeat: repeats queue and shuffles after each song 
 export interface PlayerOptions {
     /** Guild id of the player */
     guildId: string;

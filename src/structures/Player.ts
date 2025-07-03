@@ -3,6 +3,7 @@ import { bandCampSearch } from "./CustomSearches/BandCampSearch";
 import { FilterManager } from "./Filters";
 import { Queue, QueueSaver } from "./Queue";
 import { queueTrackEnd, safeStringify } from "./Utils";
+import axios from "axios";
 
 import type { DestroyReasons } from "./Constants";
 import type { Track, UnresolvedTrack } from "./Types/Track";
@@ -37,6 +38,10 @@ export class Player {
     public paused: boolean = false;
     /** Repeat Mode of the Player */
     public repeatMode: RepeatMode = "off";
+    /** Autoplay state - whether autoplay is enabled */
+    public isAutoplay: boolean = false;
+    /** Number of tries for autoplay recommendations */
+    public autoplayTries: number | null = null;
     /** Player's ping */
     public ping = {
         /* Response time for rest actions with Lavalink Server */
@@ -512,9 +517,319 @@ export class Player {
      * @param repeatMode
      */
     async setRepeatMode(repeatMode: RepeatMode) {
-        if (!["off", "track", "queue"].includes(repeatMode)) throw new RangeError("Repeatmode must be either 'off', 'track', or 'queue'");
+        if (!["off", "track", "queue", "dynamic"].includes(repeatMode)) throw new RangeError("Repeatmode must be either 'off', 'track', 'queue', or 'dynamic'");
         this.repeatMode = repeatMode;
         return this;
+    }
+
+    /**
+     * Go back to the previous track in the queue
+     * @returns {Promise<this>} The player instance
+     * @throws {RangeError} If there are no previous tracks available
+     */
+    async previous(): Promise<this> {
+        // Check if there are previous tracks in the queue
+        if (!this.queue.previous.length) {
+            throw new RangeError("No previous track available in the queue");
+        }
+
+        // Get the last played track and remove it from the previous queue
+        const previousTrack = this.queue.previous.pop();
+        if (!previousTrack) {
+            throw new RangeError("Failed to get previous track from queue");
+        }
+
+        // If there's a current track playing, add it to the beginning of the queue
+        if (this.queue.current) {
+            this.queue.tracks.unshift(this.queue.current);
+        }
+
+        // Set internal flag to indicate we're going to previous track
+        this.set("internal_skipped", true);
+
+        // Play the previous track
+        const now = performance.now();
+        await this.play({ clientTrack: previousTrack, noReplace: false });
+
+        this.ping.lavalink = Math.round((performance.now() - now) / 10) / 100;
+
+        return this;
+    }
+
+    /**
+     * Sets the autoplay state of the player
+     * @param autoplayState Whether autoplay should be enabled
+     * @param botUser The user object that should be used as the bot user
+     * @param tries The number of times to try finding recommendations if the first doesn't work
+     * @returns {this} The player instance
+     */
+    setAutoplay<T = unknown>(autoplayState: boolean, botUser?: T, tries?: number): this {
+        if (typeof autoplayState !== "boolean") {
+            throw new Error("autoplayState must be a boolean");
+        }
+
+        if (autoplayState) {
+            if (!botUser) {
+                throw new Error("botUser must be provided when enabling autoplay");
+            }
+
+            this.autoplayTries = tries && typeof tries === "number" && tries > 0 ? tries : 3;
+            this.isAutoplay = true;
+            this.set("Internal_BotUser", botUser);
+        } else {
+            this.isAutoplay = false;
+            this.autoplayTries = null;
+            this.set("Internal_BotUser", null);
+        }
+
+        return this;
+    }
+
+    /**
+     * Built-in autoplay function that gets called automatically when queue ends
+     * @param track The last played track
+     */
+    async executeAutoplay(track: Track): Promise<void> {
+        if (!this.isAutoplay || !this.autoplayTries) return;
+
+        try {
+            const recommendations = await this.getRecommendedTracks(track);
+            
+            if (recommendations.length > 0) {
+                // Add a limited number of tracks based on autoplayTries
+                const tracksToAdd = recommendations.slice(0, this.autoplayTries);
+                await this.queue.add(tracksToAdd);
+                
+                if (this.LavalinkManager.options?.advancedOptions?.enableDebugEvents) {
+                    this.LavalinkManager.emit("debug", DebugEvents.AutoplayExecution, {
+                        state: "log",
+                        message: `Added ${tracksToAdd.length} autoplay tracks to queue for guild: ${this.guildId}`,
+                        functionLayer: "Player > executeAutoplay()",
+                    });
+                }
+            } else if (this.LavalinkManager.options?.advancedOptions?.enableDebugEvents) {
+                this.LavalinkManager.emit("debug", DebugEvents.AutoplayNoSongsAdded, {
+                    state: "warn",
+                    message: `No recommendations found for autoplay in guild: ${this.guildId}`,
+                    functionLayer: "Player > executeAutoplay()",
+                });
+            }
+        } catch (error) {
+            if (this.LavalinkManager.options?.advancedOptions?.enableDebugEvents) {
+                this.LavalinkManager.emit("debug", DebugEvents.AutoplayExecution, {
+                    state: "error",
+                    message: `Autoplay failed in guild: ${this.guildId} - ${error instanceof Error ? error.message : String(error)}`,
+                    functionLayer: "Player > executeAutoplay()",
+                });
+            }
+        }
+    }
+
+    /**
+     * Gets recommended tracks based on the provided track
+     * @param track The track to find recommendations for
+     * @returns Promise<Track[]> Array of recommended tracks
+     */
+    async getRecommendedTracks(track: Track): Promise<Track[]> {
+        if (!this.LavalinkManager.utils.isTrack(track)) {
+            throw new RangeError("Track must be a valid Track object");
+        }
+
+        const node = this.LavalinkManager.nodeManager.leastUsedNodes[0];
+        if (!node) {
+            throw new Error("No available nodes");
+        }
+
+        // Check if the manager has a lastFmApiKey option
+        const apiKey = this.LavalinkManager.options?.playerOptions?.lastFmApiKey;
+        const enabledSources = node.info?.sourceManagers || [];
+
+        // Use YouTube-based autoplay if no API key or YouTube is available
+        if (!apiKey && enabledSources.includes("youtube")) {
+            return await this.handleYouTubeRecommendations(track);
+        }
+
+        if (!apiKey) return [];
+
+        // Use Last.fm-based autoplay
+        const selectedSource = this.selectPlatform(enabledSources);
+        if (selectedSource) {
+            return await this.handlePlatformAutoplay(track, selectedSource, apiKey);
+        }
+
+        return [];
+    }
+
+    /**
+     * Handles YouTube-based recommendations
+     * @param track The track to find recommendations for
+     * @returns Promise<Track[]> Array of recommended tracks
+     */
+    private async handleYouTubeRecommendations(track: Track): Promise<Track[]> {
+        const hasYouTubeURL = ["youtube.com", "youtu.be"].some((url) => track.info.uri.includes(url));
+        
+        let videoID: string | null = null;
+        if (hasYouTubeURL) {
+            videoID = track.info.uri.split("=").pop() || null;
+        } else {
+            const searchResult = await this.node.search({ 
+                query: `${track.info.author} - ${track.info.title}`, 
+                source: "ytsearch" 
+            }, track.requester);
+            
+            if (searchResult.tracks.length > 0) {
+                videoID = searchResult.tracks[0].info.uri.split("=").pop() || null;
+            }
+        }
+
+        if (!videoID) return [];
+
+        // Generate random index between 2 and 24 for YouTube mix
+        let randomIndex: number;
+        let searchURI: string;
+        do {
+            randomIndex = Math.floor(Math.random() * 23) + 2;
+            searchURI = `https://www.youtube.com/watch?v=${videoID}&list=RD${videoID}&index=${randomIndex}`;
+        } while (track.info.uri.includes(searchURI));
+
+        const res = await this.node.search({ 
+            query: searchURI, 
+            source: "ytsearch" 
+        }, track.requester);
+
+        if (res.loadType === "empty" || res.loadType === "error") return [];
+
+        return res.tracks.filter((t) => t.info.uri !== track.info.uri);
+    }
+
+    /**
+     * Handles Last.fm-based autoplay
+     * @param track The track to find recommendations for
+     * @param source The selected search platform
+     * @param apiKey The Last.fm API key
+     * @returns Promise<Track[]> Array of recommended tracks
+     */
+    private async handlePlatformAutoplay(track: Track, source: string, apiKey: string): Promise<Track[]> {
+        let { author: artist } = track.info;
+        const { title } = track.info;
+
+        if (!artist || !title) {
+            if (!title && artist) {
+                const topTracksData = await this.fetchLastFmData(`https://ws.audioscrobbler.com/2.0/?method=artist.getTopTracks&artist=${encodeURIComponent(artist)}&autocorrect=1&api_key=${apiKey}&format=json`);
+                
+                if (topTracksData?.toptracks?.track?.length) {
+                    const randomTrack = topTracksData.toptracks.track[Math.floor(Math.random() * topTracksData.toptracks.track.length)];
+                    const res = await this.node.search({ 
+                        query: `${randomTrack.artist.name} - ${randomTrack.name}`, 
+                        source: source as any 
+                    }, track.requester);
+                    
+                    if (res.loadType !== "empty" && res.loadType !== "error") {
+                        return res.tracks.filter((t) => t.info.uri !== track.info.uri);
+                    }
+                }
+                return [];
+            }
+            
+            if (!artist && title) {
+                const searchData = await this.fetchLastFmData(`https://ws.audioscrobbler.com/2.0/?method=track.search&track=${encodeURIComponent(title)}&api_key=${apiKey}&format=json`);
+                artist = searchData?.results?.trackmatches?.track?.[0]?.artist;
+                if (!artist) return [];
+            }
+        }
+
+        if (!artist || !title) return [];
+
+        // Search for similar tracks
+        const similarData = await this.fetchLastFmData(`https://ws.audioscrobbler.com/2.0/?method=track.getSimilar&artist=${encodeURIComponent(artist)}&track=${encodeURIComponent(title)}&limit=10&autocorrect=1&api_key=${apiKey}&format=json`);
+
+        if (similarData?.similartracks?.track?.length) {
+            const results: Track[] = [];
+            for (const similarTrack of similarData.similartracks.track) {
+                const res = await this.node.search({ 
+                    query: `${similarTrack.artist.name} - ${similarTrack.name}`, 
+                    source: source as any 
+                }, track.requester);
+                
+                if (res.loadType !== "empty" && res.loadType !== "error") {
+                    results.push(...res.tracks.filter((t) => t.info.uri !== track.info.uri));
+                }
+            }
+            return results;
+        }
+
+        // Fallback to artist top tracks
+        const topTracksData = await this.fetchLastFmData(`https://ws.audioscrobbler.com/2.0/?method=artist.getTopTracks&artist=${encodeURIComponent(artist)}&autocorrect=1&api_key=${apiKey}&format=json`);
+        
+        if (topTracksData?.toptracks?.track?.length) {
+            const randomTrack = topTracksData.toptracks.track[Math.floor(Math.random() * topTracksData.toptracks.track.length)];
+            const res = await this.node.search({ 
+                query: `${randomTrack.artist.name} - ${randomTrack.name}`, 
+                source: source as any 
+            }, track.requester);
+            
+            if (res.loadType !== "empty" && res.loadType !== "error") {
+                return res.tracks.filter((t) => t.info.uri !== track.info.uri);
+            }
+        }
+
+        return [];
+    }
+
+    /**
+     * Helper method to fetch data from Last.fm API
+     * @param url The URL to fetch data from
+     * @returns Promise<any> The parsed JSON response
+     */
+    private async fetchLastFmData(url: string): Promise<any> {
+        try {
+            const response = await axios.get(url, {
+                timeout: 10000,
+                headers: {
+                    'User-Agent': 'lavalink-client/2.5.6'
+                }
+            });
+            
+            return response.data?.error ? null : response.data;
+        } catch (error) {
+            if (this.LavalinkManager.options?.advancedOptions?.enableDebugEvents) {
+                this.LavalinkManager.emit("debug", DebugEvents.AutoplayExecution, {
+                    state: "warn",
+                    message: `Last.fm API request failed: ${error instanceof Error ? error.message : String(error)}`,
+                    functionLayer: "Player > fetchLastFmData()",
+                });
+            }
+            return null;
+        }
+    }
+
+    /**
+     * Selects the best platform for autoplay based on enabled sources
+     * @param enabledSources Array of enabled source managers  
+     * @returns string|null The selected platform search prefix or null
+     */
+    private selectPlatform(enabledSources: string[]): string | null {
+        // Dynamic platform mapping based on what's actually enabled
+        const platformMap: Record<string, string> = {
+            spotify: "spsearch",
+            deezer: "dzsearch", 
+            applemusic: "amsearch",
+            amazonmusic: "amznmsearch",
+            youtube: "ytmsearch",
+            soundcloud: "scsearch",
+            yandexmusic: "ymsearch",
+            tidal: "tdsearch",
+            qobuz: "qbsearch"
+        };
+
+        // Find the first enabled source that we support
+        for (const enabledSource of enabledSources) {
+            if (platformMap[enabledSource]) {
+                return platformMap[enabledSource];
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -861,6 +1176,8 @@ export class Player {
             volume: this.volume,
             lavalinkVolume: this.lavalinkVolume,
             repeatMode: this.repeatMode,
+            isAutoplay: this.isAutoplay,
+            autoplayTries: this.autoplayTries,
             paused: this.paused,
             playing: this.playing,
             createdTimeStamp: this.createdTimeStamp,
