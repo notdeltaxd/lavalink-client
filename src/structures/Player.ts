@@ -648,7 +648,7 @@ export class Player {
         if (this.LavalinkManager.options?.advancedOptions?.enableDebugEvents) {
             this.LavalinkManager.emit("debug", DebugEvents.AutoplayExecution, {
                 state: "log",
-                message: `Getting recommendations - API Key: ${!!apiKey}, Sources: ${enabledSources.join(', ')}, Track: ${track.info.title} by ${track.info.author}`,
+                message: `Getting recommendations - API Key: ${apiKey || null}, Sources: ${enabledSources.join(', ')}, Track: ${track.info.title} by ${track.info.author}`,
                 functionLayer: "Player > getRecommendedTracks() > start",
             });
         }
