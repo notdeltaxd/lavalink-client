@@ -596,17 +596,30 @@ export class Player {
             const recommendations = await this.getRecommendedTracks(track);
             
             if (recommendations.length > 0) {
-                // Add a limited number of tracks based on autoplayTries (min 1, max 3)
-                const maxTracks = Math.min(Math.max(this.autoplayTries || 1, 1), 3);
-                const tracksToAdd = recommendations.slice(0, maxTracks);
-                await this.queue.add(tracksToAdd);
+                // Filter recommendations to avoid duplicates and unwanted tracks
+                const filteredTracks = this.filterAutoplayTracks(recommendations, track);
                 
-                if (this.LavalinkManager.options?.advancedOptions?.enableDebugEvents) {
-                    this.LavalinkManager.emit("debug", DebugEvents.AutoplayExecution, {
-                        state: "log",
-                        message: `Added ${tracksToAdd.length} autoplay tracks to queue for guild: ${this.guildId}`,
-                        functionLayer: "Player > executeAutoplay()",
-                    });
+                if (filteredTracks.length > 0) {
+                    // Add only 1 track for autoplay
+                    const tracksToAdd = filteredTracks.slice(0, 1);
+                    await this.queue.add(tracksToAdd);
+                    
+                    if (this.LavalinkManager.options?.advancedOptions?.enableDebugEvents) {
+                        this.LavalinkManager.emit("debug", DebugEvents.AutoplayExecution, {
+                            state: "log",
+                            message: `Added ${tracksToAdd.length} autoplay tracks to queue for guild: ${this.guildId}`,
+                            functionLayer: "Player > executeAutoplay()",
+                        });
+                    }
+                } else {
+                    if (this.LavalinkManager.options?.advancedOptions?.enableDebugEvents) {
+                        this.LavalinkManager.emit("debug", DebugEvents.AutoplayNoSongsAdded, {
+                            state: "warn",
+                            message: `All recommended tracks were filtered out for guild: ${this.guildId}`,
+                            functionLayer: "Player > executeAutoplay()",
+                        });
+                    }
+                    return;
                 }
             } else if (this.LavalinkManager.options?.advancedOptions?.enableDebugEvents) {
                 this.LavalinkManager.emit("debug", DebugEvents.AutoplayNoSongsAdded, {
@@ -624,6 +637,169 @@ export class Player {
                 });
             }
         }
+    }
+
+    /**
+     * Filters autoplay tracks to avoid duplicates and unwanted content
+     * @param tracks Array of recommended tracks to filter
+     * @param currentTrack The current playing track for comparison
+     * @returns Filtered array of tracks
+     */
+    private filterAutoplayTracks(tracks: Track[], currentTrack: Track): Track[] {
+        const queueTracks = [...this.queue.tracks, ...this.queue.previous]
+            .filter(t => this.LavalinkManager.utils.isTrack(t)) as Track[];
+        if (this.queue.current && this.LavalinkManager.utils.isTrack(this.queue.current)) {
+            queueTracks.push(this.queue.current as Track);
+        }
+        
+        return tracks.filter(track => {
+            // Filter out current track
+            if (track.info.uri === currentTrack.info.uri) return false;
+            
+            // Filter by ISRC if available
+            if (track.info.isrc && currentTrack.info.isrc && track.info.isrc === currentTrack.info.isrc) {
+                if (this.LavalinkManager.options?.advancedOptions?.enableDebugEvents) {
+                    this.LavalinkManager.emit("debug", DebugEvents.AutoplayExecution, {
+                        state: "log",
+                        message: `Filtered track with same ISRC: ${track.info.title} by ${track.info.author}`,
+                        functionLayer: "Player > filterAutoplayTracks() > ISRC filter",
+                    });
+                }
+                return false;
+            }
+            
+            // Filter out tracks already in queue or previous tracks
+            for (const queueTrack of queueTracks) {
+                // Same URI
+                if (track.info.uri === queueTrack.info.uri) return false;
+                
+                // Same ISRC
+                if (track.info.isrc && queueTrack.info.isrc && track.info.isrc === queueTrack.info.isrc) {
+                    if (this.LavalinkManager.options?.advancedOptions?.enableDebugEvents) {
+                        this.LavalinkManager.emit("debug", DebugEvents.AutoplayExecution, {
+                            state: "log",
+                            message: `Filtered queue duplicate with same ISRC: ${track.info.title} by ${track.info.author}`,
+                            functionLayer: "Player > filterAutoplayTracks() > queue ISRC filter",
+                        });
+                    }
+                    return false;
+                }
+                
+                // Similar title and artist (fuzzy matching)
+                if (this.isSimilarTrack(track, queueTrack)) {
+                    if (this.LavalinkManager.options?.advancedOptions?.enableDebugEvents) {
+                        this.LavalinkManager.emit("debug", DebugEvents.AutoplayExecution, {
+                            state: "log",
+                            message: `Filtered similar track: ${track.info.title} by ${track.info.author}`,
+                            functionLayer: "Player > filterAutoplayTracks() > similarity filter",
+                        });
+                    }
+                    return false;
+                }
+            }
+            
+            // Filter out very short or very long tracks
+            if (track.info.duration < 30000 || track.info.duration > 600000) {
+                if (this.LavalinkManager.options?.advancedOptions?.enableDebugEvents) {
+                    this.LavalinkManager.emit("debug", DebugEvents.AutoplayExecution, {
+                        state: "log",
+                        message: `Filtered track by duration (${track.info.duration}ms): ${track.info.title} by ${track.info.author}`,
+                        functionLayer: "Player > filterAutoplayTracks() > duration filter",
+                    });
+                }
+                return false;
+            }
+            
+            return true;
+        });
+    }
+
+    /**
+     * Checks if two tracks are similar based on title and artist
+     * @param track1 First track to compare
+     * @param track2 Second track to compare
+     * @returns True if tracks are considered similar
+     */
+    private isSimilarTrack(track1: Track, track2: Track): boolean {
+        const normalizeString = (str: string): string => {
+            return str.toLowerCase()
+                .replace(/[^\w\s]/g, '') // Remove special characters
+                .replace(/\s+/g, ' ')    // Normalize whitespace
+                .trim();
+        };
+        
+        const title1 = normalizeString(track1.info.title);
+        const title2 = normalizeString(track2.info.title);
+        const artist1 = normalizeString(track1.info.author);
+        const artist2 = normalizeString(track2.info.author);
+        
+        // Check for exact matches
+        if (title1 === title2 && artist1 === artist2) return true;
+        
+        // Check for title similarity (>80% similar)
+        if (artist1 === artist2 && this.calculateSimilarity(title1, title2) > 0.8) return true;
+        
+        // Check for remixes, versions, etc.
+        const keywords = ['remix', 'version', 'edit', 'mix', 'radio', 'extended', 'acoustic', 'live'];
+        for (const keyword of keywords) {
+            if ((title1.includes(keyword) || title2.includes(keyword)) && 
+                artist1 === artist2 && 
+                this.calculateSimilarity(title1.replace(keyword, '').trim(), title2.replace(keyword, '').trim()) > 0.7) {
+                return true;
+            }
+        }
+        
+        return false;
+    }
+
+    /**
+     * Calculates similarity between two strings using basic algorithm
+     * @param str1 First string
+     * @param str2 Second string
+     * @returns Similarity score between 0 and 1
+     */
+    private calculateSimilarity(str1: string, str2: string): number {
+        const longer = str1.length > str2.length ? str1 : str2;
+        const shorter = str1.length > str2.length ? str2 : str1;
+        
+        if (longer.length === 0) return 1.0;
+        
+        const distance = this.levenshteinDistance(longer, shorter);
+        return (longer.length - distance) / longer.length;
+    }
+
+    /**
+     * Calculates Levenshtein distance between two strings
+     * @param str1 First string
+     * @param str2 Second string
+     * @returns Edit distance
+     */
+    private levenshteinDistance(str1: string, str2: string): number {
+        const matrix: number[][] = [];
+        
+        for (let i = 0; i <= str2.length; i++) {
+            matrix[i] = [i];
+        }
+        
+        for (let j = 0; j <= str1.length; j++) {
+            matrix[0][j] = j;
+        }
+        
+        for (let i = 1; i <= str2.length; i++) {
+            for (let j = 1; j <= str1.length; j++) {
+                if (str2.charAt(i - 1) === str1.charAt(j - 1)) {
+                    matrix[i][j] = matrix[i - 1][j - 1];
+                } else {
+                    matrix[i][j] = Math.min(
+                        matrix[i - 1][j - 1] + 1,
+                        matrix[i][j - 1] + 1,
+                        matrix[i - 1][j] + 1
+                    );
+                }
+            }
+        }
+        
+        return matrix[str2.length][str1.length];
     }
 
     /**
