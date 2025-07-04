@@ -292,6 +292,12 @@ export class LavalinkManager extends EventEmitter {
         if (oldPlayer) return oldPlayer;
 
         const newPlayer = new Player(options, this, true);
+        
+        // Auto-enable autoplay if specified in options
+        if (options.autoplay) {
+            newPlayer.setAutoplay(true, 3);
+        }
+        
         this.players.set(newPlayer.guildId, newPlayer);
         this.emit("playerCreate", newPlayer);
         return newPlayer;

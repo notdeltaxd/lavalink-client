@@ -85,6 +85,8 @@ export interface PlayerOptions {
     applyVolumeAsFilter?: boolean;
     /** Custom Data for the player get/set datastorage */
     customData?:anyObject;
+    /** Whether to automatically enable autoplay for this player */
+    autoplay?: boolean;
 }
 
 export type anyObject = { [key: string | number]: string | number | null | anyObject };
