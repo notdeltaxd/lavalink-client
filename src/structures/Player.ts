@@ -600,8 +600,9 @@ export class Player {
                 const filteredTracks = this.filterAutoplayTracks(recommendations, track);
                 
                 if (filteredTracks.length > 0) {
-                    // Add only 1 track for autoplay
-                    const tracksToAdd = filteredTracks.slice(0, 1);
+                    // Add a random track for autoplay
+                    const randomIndex = Math.floor(Math.random() * filteredTracks.length);
+                    const tracksToAdd = [filteredTracks[randomIndex]];
                     await this.queue.add(tracksToAdd);
                     
                     if (this.LavalinkManager.options?.advancedOptions?.enableDebugEvents) {
@@ -960,7 +961,7 @@ export class Player {
 
         if (res.loadType === "empty" || res.loadType === "error") return [];
 
-        return res.tracks.filter((t) => t.info.uri !== track.info.uri);
+        return res.tracks.filter((t) => t.info.uri !== track.info.uri && t.info.identifier !== track.info.identifier);
     }
 
     /**
@@ -986,7 +987,11 @@ export class Player {
                     }, track.requester);
                     
                     if (res.loadType !== "empty" && res.loadType !== "error") {
-                        return res.tracks.filter((t) => t.info.uri !== track.info.uri);
+                        return res.tracks.filter((t) => 
+                            t.info.uri !== track.info.uri && 
+                            !this.queue.current?.info.uri.includes(t.info.uri) &&
+                            !this.queue.previous?.some(pt => pt.info.uri === t.info.uri || pt.info.identifier === t.info.identifier)
+                        );
                     }
                 }
                 return [];
@@ -1013,7 +1018,12 @@ export class Player {
                 }, track.requester);
                 
                 if (res.loadType !== "empty" && res.loadType !== "error") {
-                    results.push(...res.tracks.filter((t) => t.info.uri !== track.info.uri));
+                    results.push(...res.tracks.filter((t) => 
+                        t.info.uri !== track.info.uri && 
+                        t.info.identifier !== track.info.identifier &&
+                        !this.queue.current?.info.uri.includes(t.info.uri) &&
+                        !this.queue.previous?.some(pt => pt.info.uri === t.info.uri || pt.info.identifier === t.info.identifier)
+                    ));
                 }
             }
             return results;
@@ -1030,13 +1040,16 @@ export class Player {
             }, track.requester);
             
             if (res.loadType !== "empty" && res.loadType !== "error") {
-                return res.tracks.filter((t) => t.info.uri !== track.info.uri);
+                return res.tracks.filter((t) => 
+                    t.info.uri !== track.info.uri &&
+                    !this.queue.current?.info.uri.includes(t.info.uri) &&
+                    !this.queue.previous?.some(pt => pt.info.uri === t.info.uri || pt.info.identifier === t.info.identifier)
+                );
             }
         }
 
         return [];
     }
-
     /**
      * Helper method to fetch data from Last.fm API
      * @param url The URL to fetch data from
