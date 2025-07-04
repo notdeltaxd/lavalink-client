@@ -1075,10 +1075,7 @@ export class Player {
             spotify: "spsearch",
             deezer: "dzsearch", 
             applemusic: "amsearch",
-            amazonmusic: "amznmsearch",
             youtube: "ytmsearch",
-            tidal: "tdsearch",
-            qobuz: "qbsearch",
             jiosaavn: "jssearch"
         };
 
