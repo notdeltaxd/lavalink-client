@@ -296,6 +296,13 @@ export class LavalinkManager extends EventEmitter {
         // Auto-enable autoplay if specified in options
         if (options.autoplay) {
             newPlayer.setAutoplay(true, 3);
+            if (this.options?.advancedOptions?.enableDebugEvents) {
+                this.emit("debug", DebugEvents.PlayerAutoplayEnabled, {
+                    state: "log",
+                    message: `Autoplay enabled for player ${newPlayer.guildId}: isAutoplay=${newPlayer.isAutoplay}, tries=${newPlayer.autoplayTries}`,
+                    functionLayer: "LavalinkManager > createPlayer()",
+                });
+            }
         }
         
         this.players.set(newPlayer.guildId, newPlayer);

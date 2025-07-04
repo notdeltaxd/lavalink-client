@@ -1541,6 +1541,13 @@ export class LavalinkNode {
         }
 
         // Built-in autoplay system
+        if (this.NodeManager.LavalinkManager.options?.advancedOptions?.enableDebugEvents) {
+            this.NodeManager.LavalinkManager.emit("debug", DebugEvents.QueueEnded, {
+                state: "log",
+                message: `Queue ended for guild ${player.guildId}: isAutoplay=${player.isAutoplay}, internal_autoplayStopPlaying=${player.get("internal_autoplayStopPlaying")}`,
+                functionLayer: "LavalinkNode > queueEnd() > autoplay check",
+            });
+        }
         if (player.isAutoplay && typeof player.get("internal_autoplayStopPlaying") === "undefined") {
             if (this.NodeManager.LavalinkManager.options?.advancedOptions?.enableDebugEvents) {
                 this.NodeManager.LavalinkManager.emit("debug", DebugEvents.AutoplayExecution, {
@@ -1558,6 +1565,8 @@ export class LavalinkNode {
                     if (payload.type === "TrackEndEvent") this.NodeManager.LavalinkManager.emit("trackEnd", player, track, payload);
                     if (this.NodeManager.LavalinkManager.options.autoSkip) return player.play({ noReplace: true, paused: false });
                 }
+                // Don't emit queueEnd if autoplay successfully added tracks
+                return;
             } else if (this.NodeManager.LavalinkManager.options?.advancedOptions?.enableDebugEvents) {
                 this.NodeManager.LavalinkManager.emit("debug", DebugEvents.AutoplayNoSongsAdded, {
                     state: "warn",

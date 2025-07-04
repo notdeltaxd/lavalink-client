@@ -8,6 +8,7 @@ export enum DebugEvents {
     AutoplayExecution = "AutoplayExecution",
     AutoplayNoSongsAdded = "AutoplayNoSongsAdded",
     AutoplayThresholdSpamLimiter = "AutoplayThresholdSpamLimiter",
+    PlayerAutoplayEnabled = "PlayerAutoplayEnabled",
     TriggerQueueEmptyInterval = "TriggerQueueEmptyInterval",
     QueueEnded = "QueueEnded",
     TrackStartNewSongsOnly = "TrackStartNewSongsOnly",
