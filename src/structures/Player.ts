@@ -651,6 +651,11 @@ export class Player {
                 message: `Getting recommendations - API Key: ${apiKey || null}, Sources: ${enabledSources.join(', ')}, Track: ${track.info.title} by ${track.info.author}`,
                 functionLayer: "Player > getRecommendedTracks() > start",
             });
+            this.LavalinkManager.emit("debug", DebugEvents.AutoplayExecution, {
+                state: "log",
+                message: `LavalinkManager.options.playerOptions: ${JSON.stringify(this.LavalinkManager.options?.playerOptions || {})}`,
+                functionLayer: "Player > getRecommendedTracks() > debug options",
+            });
         }
 
         // Use YouTube-based autoplay if no API key or YouTube is available
