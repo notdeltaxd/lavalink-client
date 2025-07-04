@@ -1077,7 +1077,6 @@ export class Player {
             applemusic: "amsearch",
             amazonmusic: "amznmsearch",
             youtube: "ytmsearch",
-            soundcloud: "scsearch",
             tidal: "tdsearch",
             qobuz: "qbsearch",
             jiosaavn: "jssearch"
