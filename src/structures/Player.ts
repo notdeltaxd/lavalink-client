@@ -596,8 +596,9 @@ export class Player {
             const recommendations = await this.getRecommendedTracks(track);
             
             if (recommendations.length > 0) {
-                // Add a limited number of tracks based on autoplayTries
-                const tracksToAdd = recommendations.slice(0, this.autoplayTries);
+                // Add a limited number of tracks based on autoplayTries (min 1, max 3)
+                const maxTracks = Math.min(Math.max(this.autoplayTries || 1, 1), 3);
+                const tracksToAdd = recommendations.slice(0, maxTracks);
                 await this.queue.add(tracksToAdd);
                 
                 if (this.LavalinkManager.options?.advancedOptions?.enableDebugEvents) {
@@ -667,6 +668,67 @@ export class Player {
 
         return [];
     }
+
+    // /**
+    //  * Handles basic platform search without Last.fm API
+    //  * @param track The track to find recommendations for
+    //  * @param platform The search platform to use
+    //  * @returns Promise<Track[]> Array of recommended tracks
+    //  */
+    // private async handleBasicPlatformSearch(track: Track, platform: string): Promise<Track[]> {
+    //     if (this.LavalinkManager.options?.advancedOptions?.enableDebugEvents) {
+    //         this.LavalinkManager.emit("debug", DebugEvents.AutoplayExecution, {
+    //             state: "log",
+    //             message: `Using basic ${platform} search for: ${track.info.title} by ${track.info.author}`,
+    //             functionLayer: "Player > handleBasicPlatformSearch() > start",
+    //         });
+    //     }
+
+    //     // Create search query based on current track
+    //     const searchQueries = [
+    //         `${track.info.author}`, // Artist name only
+    //         `${track.info.title}`, // Song title only  
+    //         `${track.info.author} ${track.info.title}`, // Full search
+    //     ];
+
+    //     for (const query of searchQueries) {
+    //         try {
+    //             const searchResult = await this.node.search({ 
+    //                 query, 
+    //                 source: platform as any
+    //             }, track.requester);
+
+    //             if (searchResult.tracks.length > 0) {
+    //                 // Filter out the same track and return random selections
+    //                 const filteredTracks = searchResult.tracks
+    //                     .filter(t => t.info.uri !== track.info.uri)
+    //                     .slice(0, 3);
+                    
+    //                 if (filteredTracks.length > 0) {
+    //                     if (this.LavalinkManager.options?.advancedOptions?.enableDebugEvents) {
+    //                         this.LavalinkManager.emit("debug", DebugEvents.AutoplayExecution, {
+    //                             state: "log",
+    //                             message: `Found ${filteredTracks.length} tracks using ${platform} with query: "${query}"`,
+    //                             functionLayer: "Player > handleBasicPlatformSearch() > success",
+    //                         });
+    //                     }
+    //                     return filteredTracks;
+    //                 }
+    //             }
+    //         } catch (error) {
+    //             if (this.LavalinkManager.options?.advancedOptions?.enableDebugEvents) {
+    //                 this.LavalinkManager.emit("debug", DebugEvents.AutoplayExecution, {
+    //                     state: "warn",
+    //                     message: `${platform} search failed for query "${query}": ${error instanceof Error ? error.message : String(error)}`,
+    //                     functionLayer: "Player > handleBasicPlatformSearch() > error",
+    //                 });
+    //             }
+    //             continue;
+    //         }
+    //     }
+
+    //     return [];
+    // }
 
     /**
      * Handles YouTube-based recommendations
@@ -853,11 +915,29 @@ export class Player {
             }
         }
 
+        if (this.LavalinkManager.options?.advancedOptions?.enableDebugEvents) {
+            this.LavalinkManager.emit("debug", DebugEvents.AutoplayExecution, {
+                state: "log",
+                message: `Platform selection - Enabled sources: [${enabledSources.join(', ')}], Available sources: [${availableSources.join(', ')}]`,
+                functionLayer: "Player > selectPlatform()",
+            });
+        }
+
         // Return random source if any available
         if (availableSources.length === 0) return null;
         
         const randomIndex = Math.floor(Math.random() * availableSources.length);
-        return availableSources[randomIndex];
+        const selectedSource = availableSources[randomIndex];
+        
+        if (this.LavalinkManager.options?.advancedOptions?.enableDebugEvents) {
+            this.LavalinkManager.emit("debug", DebugEvents.AutoplayExecution, {
+                state: "log",
+                message: `Selected source: ${selectedSource} (index ${randomIndex} from ${availableSources.length} available)`,
+                functionLayer: "Player > selectPlatform()",
+            });
+        }
+        
+        return selectedSource;
     }
 
     /**
