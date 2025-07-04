@@ -102,7 +102,7 @@ export class LavalinkManager extends EventEmitter {
                 volumeDecrementer: options?.playerOptions?.volumeDecrementer ?? 1,
                 requesterTransformer: options?.playerOptions?.requesterTransformer ?? null,
                 useUnresolvedData: options?.playerOptions?.useUnresolvedData ?? false,
-
+                lastFmApiKey: options?.playerOptions?.lastFmApiKey ?? undefined,
                 maxErrorsPerTime: {
                     threshold: options?.playerOptions?.maxErrorsPerTime?.threshold ?? 35_000,
                     maxAmount: options?.playerOptions?.maxErrorsPerTime?.maxAmount ?? 3
