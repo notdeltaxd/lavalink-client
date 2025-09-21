@@ -66,6 +66,15 @@ export const DefaultSources: Record<
   musicgaana: "gaanasearch",
   "music gaana": "gaanasearch",
   vk: "vksearch",
+  // Pandora Music
+  pandora: "pdsearch",
+  "pandora music": "pdsearch",
+  pandoramusic: "pdsearch",
+  pd: "pdsearch",
+  musicpandora: "pdsearch",
+  "music pandora": "pdsearch",
+  pdsearch: "pdsearch",
+  pdrec: "pdrec",
   // Qobuz (lavasrc)
   qbsearch: "qbsearch",
   qobuz: "qbsearch",
@@ -216,4 +225,15 @@ export const SourceLinksRegexes: Record<SourcesRegex, RegExp> = {
   mixcloud: /https:\/\/www\.mixcloud\.com\//,
   musicYandex: /https:\/\/music\.yandex\.ru\//,
   radiohost: /https?:\/\/[^.\s]+\.radiohost\.de\/(\S+)/,
+  /** Pandora Music regexes */
+  PandoraSongRegex:
+    /https?:\/\/(?:www\.)?pandora\.com\/artist\/([^/]+)\/([^/]+)\/([^/]+)\/(?:TR[A-Za-z0-9_-]+)\/?$/,
+  PandoraPlaylistRegex:
+    /https?:\/\/(?:www\.)?pandora\.com\/playlist\/(?:PL:[0-9]+:[0-9]+)\/?$/,
+  PandoraAlbumRegex:
+    /https?:\/\/(?:www\.)?pandora\.com\/artist\/([^/]+)\/(?:(?:([^/]+)\/)?(?:AL[A-Za-z0-9_-]+))\/?$/,
+  PandoraArtistRegex:
+    /https?:\/\/(?:www\.)?pandora\.com\/artist\/([^/]+)\/(?:AR[A-Za-z0-9_-]+)\/?$/,
+  AllPandoraRegex:
+    /https?:\/\/(?:www\.)?pandora\.com\/(artist|playlist)\/((?:(?:[^/]+\/){1,3}(?:TR|AL|AR)[A-Za-z0-9_-]+)|(?:PL:[0-9]+:[0-9]+))\/?$/,
 };

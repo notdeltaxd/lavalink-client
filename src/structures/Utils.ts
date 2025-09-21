@@ -574,6 +574,18 @@ export class ManagerUtils {
         "Query / Link Provided for this Source but Lavalink Node has not 'amazonmusic' enabled via lavasrc-plugin"
       );
     }
+    if (
+      (SourceLinksRegexes.AllPandoraRegex.test(queryString) ||
+        SourceLinksRegexes.PandoraSongRegex.test(queryString) ||
+        SourceLinksRegexes.PandoraAlbumRegex.test(queryString) ||
+        SourceLinksRegexes.PandoraArtistRegex.test(queryString) ||
+        SourceLinksRegexes.PandoraPlaylistRegex.test(queryString)) &&
+      !node.info?.sourceManagers?.includes("pandora")
+    ) {
+      throw new Error(
+        "Query / Link Provided for this Source but Lavalink Node has not 'pandora' enabled via lavasrc-plugin"
+      );
+    }
     return;
   }
 
@@ -838,6 +850,19 @@ export class ManagerUtils {
     ) {
       throw new Error(
         "Lavalink Node has not 'amazonmusic' enabled via lavasrc-plugin, which is required to have 'amznsearch' work"
+      );
+    }
+    if (
+      source === "pdsearch" &&
+      !node.info?.sourceManagers?.includes("pandora")
+    ) {
+      throw new Error(
+        "Lavalink Node has not 'pandora' enabled via lavasrc-plugin, which is required to have 'pdsearch' work"
+      );
+    }
+    if (source === "pdrec" && !node.info?.sourceManagers?.includes("pandora")) {
+      throw new Error(
+        "Lavalink Node has not 'pandora' enabled via lavasrc-plugin, which is required to have 'pdrec' work"
       );
     }
 
