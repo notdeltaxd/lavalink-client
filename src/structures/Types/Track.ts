@@ -19,7 +19,9 @@ export type LavalinkPlugin_LavaSrc_SourceNames =
   | "vkmusic"
   | "tidal"
   | "qobuz"
-  | "gaana";
+  | "amazonmusic"
+  | "gaana"
+  | "pandora";
 /** Source Names provided by jiosaavan plugin */
 export type LavalinkPlugin_JioSaavn_SourceNames = "jiosaavn";
 /** The SourceNames provided by lavalink */
