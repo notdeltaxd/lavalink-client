@@ -98,7 +98,20 @@ export const DefaultSources: Record<SearchPlatform, LavalinkSearchPlatform | Cli
     "jiosaavn": "jssearch",
     "js": "jssearch",
     "jssearch": "jssearch",
-    "jsrec": "jsrec"
+    "jsrec": "jsrec",
+    // Gaana from lavasrc
+    "gaana music": "gaanasearch",
+    "gaanamusic": "gaanasearch",
+    "gaana": "gaanasearch",
+    "gaanasearch": "gaanasearch",
+    "music gaana": "gaanasearch",
+    // Amazon Music from lavasrc
+    "amazon music": "amznsearch",
+    "amazonmusic": "amznsearch",
+    "amznsearch": "amznsearch",
+    "amzn": "amznsearch",
+    "musicamazon": "amznsearch",
+    "music amazon": "amznsearch",
 }
 
 /** Lavalink Plugins definiton */
@@ -166,6 +179,19 @@ export const SourceLinksRegexes: Record<SourcesRegex, RegExp> = {
     PandoraArtistRegex: /^@?(?:https?:\/\/)?(?:www\.)?pandora\.com\/artist\/[\w\-]+\/(?<identifier>AR[A-Za-z0-9]+)(?:[?#].*)?$/,
     PandoraPlaylistRegex: /^@?(?:https?:\/\/)?(?:www\.)?pandora\.com\/playlist\/(?<identifier>PL:[\d:]+)(?:[?#].*)?$/,
     AllPandoraRegex: /^@?(?:https?:\/\/)?(?:www\.)?pandora\.com\/(?:playlist\/(?<playlistId>PL:[\d:]+)|artist\/[\w\-]+(?:\/[\w\-]+)*\/(?<identifier>(?:TR|AL|AR)[A-Za-z0-9]+))(?:[?#].*)?$/,
+
+    /** From gaana */
+    GaanaRegex: /https?:\/\/(?:www\.)?gaana\.com\/(?<type>song|album|artist|playlist)\/(?<seokey>[a-zA-Z0-9-]+)/,
+
+    /** From Amazon Music */
+    /** Amazon Music regexes */
+  AmazonMusicTrackRegex: /https?:\/\/(?:www\.)?music\.amazon\.[a-z\.]+\/tracks\/(?<identifier>[A-Za-z0-9]+)/,
+  AmazonMusicAlbumRegex: /https?:\/\/(?:www\.)?music\.amazon\.[a-z\.]+\/albums\/(?<identifier>[A-Za-z0-9]+)/,
+  AmazonMusicPlaylistRegex: /https?:\/\/(?:www\.)?music\.amazon\.[a-z\.]+\/playlists\/(?<identifier>[A-Za-z0-9]+)/,
+  AmazonMusicArtistRegex: /https?:\/\/(?:www\.)?music\.amazon\.[a-z\.]+\/artists\/(?<identifier>[A-Za-z0-9]+)/,
+  AmazonMusicUserPlaylistRegex: /https?:\/\/(?:www\.)?music\.amazon\.[a-z\.]+\/user-playlists\/(?<identifier>[A-Za-z0-9]+)/,
+  AmazonMusicCommunityPlaylistRegex: /https?:\/\/(?:www\.)?music\.amazon\.[a-z\.]+\/community-playlists\/(?<identifier>[A-Za-z0-9]+)/,
+  AllAmazonMusicRegex: /https?:\/\/(?:www\.)?music\.amazon\.[a-z\.]+\/(?<type>tracks|albums|playlists|artists|user-playlists|community-playlists)\/(?<identifier>[A-Za-z0-9]+)/,
 
     /** FROM DUNCTE BOT PLUGIN */
     tiktok: /https:\/\/www\.tiktok\.com\//,

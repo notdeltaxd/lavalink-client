@@ -227,6 +227,73 @@ export class Player {
                 }
             }
 
+            // MODIFIED: Spotify track resolution with full track replacement
+            // --- Spotify fallback (robust) ---
+            if (
+                options.clientTrack?.info?.sourceName === "spotify" &&
+                !options.clientTrack.info?.isrc &&
+                options.clientTrack.info?.uri
+            ) {
+                try {
+                    const original = options.clientTrack;
+                    const oldClientData = original.pluginInfo?.clientData ?? {};
+                    const oldUserData = original.userData ?? {};
+
+                    const res = await this.search(original.info.uri, original.requester);
+                    const resolved = res?.tracks?.[0];
+
+                    if (resolved && (resolved.encoded || resolved.info?.identifier)) {
+                        // MUTATE the original track to preserve prototype / instance identity
+                        // Copy all top-level resolved props onto original (shallow)
+                        Object.assign(original, resolved);
+
+                        // Ensure pluginInfo exists and merge clientData
+                        original.pluginInfo = {
+                            ...(original.pluginInfo ?? {}),
+                            ...(resolved.pluginInfo ?? {}),
+                            clientData: {
+                                ...oldClientData,
+                                ...(resolved.pluginInfo?.clientData ?? {}),
+                            },
+                        };
+
+                        // Mirror important clientData into userData so Lavalink sees it
+                        original.userData = {
+                            ...oldUserData,
+                            ...oldClientData,                 // keep previous clientData too
+                            ...(resolved.userData ?? {}),     // resolved's userData can override if present
+                        };
+
+                        // Keep requester intact
+                        original.requester = original.requester ?? options.clientTrack.requester;
+
+                        // Replace options.clientTrack with the mutated original (safe)
+                        options.clientTrack = original;
+
+                        // Ensure options.track carries encoded/identifier and userData so the encoded-path works
+                        options.track = {
+                            encoded: original.encoded ?? undefined,
+                            identifier: original.info?.identifier ?? undefined,
+                            requester: original.requester,
+                            userData: original.userData,
+                        };
+
+                        this._emitDebugEvent(DebugEvents.PlayerPlaySpotifyFallback, {
+                            state: "log",
+                            message: `Spotify track resolved successfully: ${original.info?.title || resolved.info?.title}`,
+                            functionLayer: "Player > play() > spotify fallback",
+                        });
+                    }
+                } catch (err) {
+                    this._emitDebugEvent(DebugEvents.PlayerPlaySpotifyFallback, {
+                        state: "error",
+                        error: err,
+                        message: "Spotify track had no ISRC, fallback search failed",
+                        functionLayer: "Player > play() > spotify fallback",
+                    });
+                }
+            }
+
             if ((typeof options.track?.userData === "object" || typeof options.clientTrack?.userData === "object") && options.clientTrack) options.clientTrack.userData = {
                 ...(typeof options?.clientTrack?.requester === "object" ? { requester: this.LavalinkManager.utils.getTransformedRequester(options?.clientTrack?.requester || {}) as anyObject } : {}),
                 ...options?.clientTrack.userData,
