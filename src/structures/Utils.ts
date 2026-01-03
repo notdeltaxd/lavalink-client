@@ -618,6 +618,14 @@ export class ManagerUtils {
         "Query / Link Provided for this Source but Lavalink Node has not 'amazonmusic' enabled"
       );
     }
+    if (
+      SourceLinksRegexes.AllAudiomackRegex.test(queryString) &&
+      !node.info?.sourceManagers?.includes("audiomack")
+    ) {
+      throw new Error(
+        "Query / Link Provided for this Source but Lavalink Node has not 'audiomack' enabled"
+      );
+    }
     return;
   }
 
@@ -896,6 +904,14 @@ export class ManagerUtils {
     ) {
       throw new Error(
         "Lavalink Node has not 'amazonmusic' enabled, which is required to have 'amznsearch' work"
+      );
+    }
+    if (
+      source === "amksearch" &&
+      !node.info?.sourceManagers?.includes("audiomack")
+    ) {
+      throw new Error(
+        "Lavalink Node has not 'audiomack' enabled, which is required to have 'amksearch' work"
       );
     }
 

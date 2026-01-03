@@ -112,6 +112,11 @@ export const DefaultSources: Record<SearchPlatform, LavalinkSearchPlatform | Cli
     "amzn": "amznsearch",
     "musicamazon": "amznsearch",
     "music amazon": "amznsearch",
+    // Audiomack from lavasrc
+    "audiomack": "amksearch",
+    "audiomack music": "amksearch",
+    "amk": "amksearch",
+    "amksearch": "amksearch",
 }
 
 /** Lavalink Plugins definiton */
@@ -192,6 +197,13 @@ export const SourceLinksRegexes: Record<SourcesRegex, RegExp> = {
   AmazonMusicUserPlaylistRegex: /https?:\/\/(?:www\.)?music\.amazon\.[a-z\.]+\/user-playlists\/(?<identifier>[A-Za-z0-9]+)/,
   AmazonMusicCommunityPlaylistRegex: /https?:\/\/(?:www\.)?music\.amazon\.[a-z\.]+\/community-playlists\/(?<identifier>[A-Za-z0-9]+)/,
   AllAmazonMusicRegex: /https?:\/\/(?:www\.)?music\.amazon\.[a-z\.]+\/(?<type>tracks|albums|playlists|artists|user-playlists|community-playlists)\/(?<identifier>[A-Za-z0-9]+)/,
+
+    /** From Audiomack */
+    AudiomackSongRegex: /https?:\/\/(?:www\.)?audiomack\.com\/(?:song\/[a-zA-Z0-9-]+\/[a-zA-Z0-9-]+|[a-zA-Z0-9-]+\/song\/[a-zA-Z0-9-]+)/,
+    AudiomackAlbumRegex: /https?:\/\/(?:www\.)?audiomack\.com\/(?:album\/[a-zA-Z0-9-]+\/[a-zA-Z0-9-]+|[a-zA-Z0-9-]+\/album\/[a-zA-Z0-9-]+)/,
+    AudiomackPlaylistRegex: /https?:\/\/(?:www\.)?audiomack\.com\/(?:playlist\/[a-zA-Z0-9-]+\/[a-zA-Z0-9-]+|[a-zA-Z0-9-]+\/playlist\/[a-zA-Z0-9-]+)/,
+    AudiomackArtistRegex: /https?:\/\/(?:www\.)?audiomack\.com\/[a-zA-Z0-9-]+(?:\/(songs|likes))?$/,
+    AllAudiomackRegex: /https?:\/\/(?:www\.)?audiomack\.com\/(?:(?:song|album|playlist)\/[a-zA-Z0-9-]+\/[a-zA-Z0-9-]+|[a-zA-Z0-9-]+(?:\/(?:song|album|playlist)\/[a-zA-Z0-9-]+|(?:\/(?:songs|likes))?)?)/,
 
     /** FROM DUNCTE BOT PLUGIN */
     tiktok: /https:\/\/www\.tiktok\.com\//,
