@@ -75,6 +75,12 @@ export interface LavalinkManagerEvents<CustomPlayerT extends Player = Player> {
      */
     "playerSocketClosed": (player: CustomPlayerT, payload: WebSocketClosedEvent) => void;
     /**
+     * Emitted when a player is being auto-repaired after a WebSocket close event.
+     * This event is triggered when the player's voice connection is automatically being restored.
+     * @event Manager#playerSocketClosedRepair
+     */
+    "playerSocketClosedRepair": (player: CustomPlayerT, payload: WebSocketClosedEvent, repairAttempt: number) => void;
+    /**
      * Emitted when a Player get's destroyed
      * @event Manager#playerDestroy
      */
@@ -251,6 +257,19 @@ export interface ManagerPlayerOptions<CustomPlayerT extends Player = Player> {
     };
     /* If to override the data from the Unresolved Track. for unresolved tracks */
     useUnresolvedData?: boolean;
+    /** What lavalink-client should do when the player's websocket is closed */
+    onSocketClosed?: {
+        /** Try to auto-repair the player connection? @default false */
+        autoRepair?: boolean;
+        /** Delay in ms before attempting repair (allows for transient issues to resolve) @default 1000 */
+        repairDelay?: number;
+        /** Maximum repair attempts within the threshold time @default 3 */
+        maxRepairAttempts?: number;
+        /** Time threshold in ms for counting repair attempts @default 60000 */
+        repairAttemptThreshold?: number;
+        /** Destroy player after max repair attempts exceeded @default true */
+        destroyOnMaxFailed?: boolean;
+    };
 }
 
 export type DeepRequired<T> = {

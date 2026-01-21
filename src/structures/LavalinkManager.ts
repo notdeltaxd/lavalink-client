@@ -115,6 +115,13 @@ export class LavalinkManager<CustomPlayerT extends Player = Player> extends Even
                 maxErrorsPerTime: {
                     threshold: options?.playerOptions?.maxErrorsPerTime?.threshold ?? 35_000,
                     maxAmount: options?.playerOptions?.maxErrorsPerTime?.maxAmount ?? 3
+                },
+                onSocketClosed: {
+                    autoRepair: options?.playerOptions?.onSocketClosed?.autoRepair ?? false,
+                    repairDelay: options?.playerOptions?.onSocketClosed?.repairDelay ?? 1000,
+                    maxRepairAttempts: options?.playerOptions?.onSocketClosed?.maxRepairAttempts ?? 3,
+                    repairAttemptThreshold: options?.playerOptions?.onSocketClosed?.repairAttemptThreshold ?? 60_000,
+                    destroyOnMaxFailed: options?.playerOptions?.onSocketClosed?.destroyOnMaxFailed ?? true,
                 }
             },
             linksWhitelist: options?.linksWhitelist ?? [],

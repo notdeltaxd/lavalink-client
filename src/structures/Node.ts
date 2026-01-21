@@ -1561,9 +1561,182 @@ export class LavalinkNode {
     }
 
     /** @private util function for handling socketClosed event */
-    private socketClosed(player: Player, payload: WebSocketClosedEvent): void {
+    private async socketClosed(player: Player, payload: WebSocketClosedEvent): Promise<void> {
         this._LManager.emit("playerSocketClosed", player, payload);
-        return;
+        
+        const socketClosedConfig = this._LManager.options.playerOptions?.onSocketClosed;
+        
+        // If auto-repair is not enabled, return early
+        if (!socketClosedConfig?.autoRepair) return;
+        
+        // Check if player is still valid and has a voice channel
+        if (!player.voiceChannelId || player.get("internal_destroystatus")) return;
+        
+        // Check if already repairing
+        if (player.get("internal_repairing")) {
+            this._emitDebugEvent(DebugEvents.PlayerSocketClosedRepair, {
+                state: "log",
+                message: `Socket closed but repair already in progress, skipping`,
+                functionLayer: "LavalinkNode > socketClosed()",
+            });
+            return;
+        }
+        
+        // Certain close codes indicate intentional disconnection - don't repair
+        // 4014 = Disconnected, 4015 = Voice server crashed, 1000 = Normal closure
+        const nonRepairableCodes = [4014, 4015, 1000];
+        if (nonRepairableCodes.includes(payload.code)) {
+            this._emitDebugEvent(DebugEvents.PlayerSocketClosedRepair, {
+                state: "log",
+                message: `Socket closed with code ${payload.code}, not repairing as this is an intentional/unrecoverable close`,
+                functionLayer: "LavalinkNode > socketClosed()",
+            });
+            return;
+        }
+        
+        // Track repair attempts
+        const repairAttempts = (player.get("internal_socketRepairAttempts") as number[] || [])
+            .filter(v => Date.now() - v < (socketClosedConfig.repairAttemptThreshold ?? 60000));
+        
+        if (repairAttempts.length >= (socketClosedConfig.maxRepairAttempts ?? 3)) {
+            this._emitDebugEvent(DebugEvents.PlayerSocketClosedRepairFailed, {
+                state: "error",
+                message: `Socket repair max attempts (${socketClosedConfig.maxRepairAttempts}) exceeded within threshold`,
+                functionLayer: "LavalinkNode > socketClosed()",
+            });
+            
+            if (socketClosedConfig.destroyOnMaxFailed !== false) {
+                player.destroy(DestroyReasons.SocketClosedRepairFail);
+            }
+            return;
+        }
+        
+        // Record this repair attempt
+        player.set("internal_socketRepairAttempts", [...repairAttempts, Date.now()]);
+        
+        this._emitDebugEvent(DebugEvents.PlayerSocketClosedRepair, {
+            state: "log",
+            message: `Attempting socket repair after close code ${payload.code}: ${payload.reason}. Attempt ${repairAttempts.length + 1}/${socketClosedConfig.maxRepairAttempts ?? 3}`,
+            functionLayer: "LavalinkNode > socketClosed()",
+        });
+        
+        // Emit repair event
+        this._LManager.emit("playerSocketClosedRepair", player, payload, repairAttempts.length + 1);
+        
+        // Delay before repair (allows transient issues to resolve)
+        await new Promise(resolve => setTimeout(resolve, socketClosedConfig.repairDelay ?? 1000));
+        
+        // Perform repair
+        await this.repairPlayerConnection(player);
+    }
+
+    /** @private Repairs the player connection while preserving queue and state */
+    private async repairPlayerConnection(player: Player): Promise<void> {
+        try {
+            // Store complete current state before repair
+            const currentTrack = player.queue.current;
+            const currentPosition = player.position;
+            const wasPaused = player.paused;
+            const wasPlaying = player.playing;
+            const volume = player.volume;
+            const repeatMode = player.repeatMode;
+            const queueTracks = [...player.queue.tracks]; // Copy all tracks in queue
+            const previousTracks = [...player.queue.previous]; // Copy previous tracks
+            const filters = player.filterManager?.data ? { ...player.filterManager.data } : undefined;
+            const equalizerBands = player.filterManager?.equalizerBands ? [...player.filterManager.equalizerBands] : undefined;
+            
+            this._emitDebugEvent(DebugEvents.PlayerSocketClosedRepair, {
+                state: "log",
+                message: `Preserving state - Current: ${currentTrack?.info?.title || 'none'}, Queue: ${queueTracks.length} tracks, Previous: ${previousTracks.length} tracks, Position: ${currentPosition}ms, Paused: ${wasPaused}`,
+                functionLayer: "LavalinkNode > repairPlayerConnection()",
+            });
+            
+            // Mark as repairing
+            player.set("internal_repairing", true);
+            
+            // Reconnect voice
+            await player.connect();
+            
+            // Sync queue from store (if using queue store) to ensure consistency
+            try {
+                await player.queue.utils.sync(true, false);
+            } catch {
+                // If sync fails, manually restore the queue
+                this._emitDebugEvent(DebugEvents.PlayerSocketClosedRepair, {
+                    state: "log",
+                    message: `Queue sync failed, manually restoring ${queueTracks.length} tracks`,
+                    functionLayer: "LavalinkNode > repairPlayerConnection()",
+                });
+            }
+            
+            // Ensure queue tracks are preserved (in case sync didn't work or wasn't stored)
+            if (player.queue.tracks.length === 0 && queueTracks.length > 0) {
+                await player.queue.add(queueTracks);
+            }
+            
+            // Restore previous tracks if they were lost
+            if (player.queue.previous.length === 0 && previousTracks.length > 0) {
+                player.queue.previous.push(...previousTracks);
+            }
+            
+            // Restore repeat mode
+            if (repeatMode && player.repeatMode !== repeatMode) {
+                player.setRepeatMode(repeatMode);
+            }
+            
+            // Restore volume
+            if (volume && player.volume !== volume) {
+                await player.setVolume(volume);
+            }
+            
+            // Restore filters if they existed
+            if (filters && player.filterManager) {
+                player.filterManager.data = filters;
+                if (equalizerBands) {
+                    player.filterManager.equalizerBands = equalizerBands;
+                }
+            }
+            
+            // If there was a current track, resume playback
+            if (currentTrack) {
+                // Set the current track back
+                player.queue.current = currentTrack;
+                
+                // Resume playing if it was playing before
+                if (wasPlaying || !wasPaused) {
+                    await player.play({
+                        clientTrack: currentTrack,
+                        position: currentPosition,
+                        paused: wasPaused,
+                    });
+                }
+            } else if (player.queue.tracks.length > 0) {
+                // No current track but queue has tracks - start playing
+                await player.play();
+            }
+            
+            // Save the restored queue state
+            await player.queue.utils.save();
+            
+            // Clear repair flag
+            player.set("internal_repairing", undefined);
+            
+            this._emitDebugEvent(DebugEvents.PlayerSocketClosedRepair, {
+                state: "log",
+                message: `Socket repair completed successfully - Queue: ${player.queue.tracks.length} tracks preserved`,
+                functionLayer: "LavalinkNode > repairPlayerConnection()",
+            });
+            
+        } catch (error) {
+            player.set("internal_repairing", undefined);
+            
+            this._emitDebugEvent(DebugEvents.PlayerSocketClosedRepairFailed, {
+                state: "error",
+                message: `Socket repair failed: ${(error as Error)?.message || error}`,
+                error: error as Error,
+                functionLayer: "LavalinkNode > repairPlayerConnection()",
+            });
+        }
     }
 
     /** @private util function for handling SponsorBlock Segmentloaded event */

@@ -59,6 +59,8 @@ export enum DebugEvents {
     PlayerDestroyFail = "PlayerDestroyFail",
     PlayerChangeNodeFailNoEligibleNode = "PlayerChangeNodeFailNoEligibleNode",
     PlayerChangeNodeFail = "PlayerChangeNodeFail",
+    PlayerSocketClosedRepair = "PlayerSocketClosedRepair",
+    PlayerSocketClosedRepairFailed = "PlayerSocketClosedRepairFailed",
 }
 
 /**
@@ -79,6 +81,7 @@ export enum DestroyReasons {
     ReconnectAllNodes = "ReconnectAllNodes",
     TrackErrorMaxTracksErroredPerTime = "TrackErrorMaxTracksErroredPerTime",
     TrackStuckMaxTracksErroredPerTime = "TrackStuckMaxTracksErroredPerTime",
+    SocketClosedRepairFail = "SocketClosedRepairFail",
 };
 
 /**

@@ -102,6 +102,14 @@ console.log(LavalinkNodesOfEnv); // you can then provide the result of here in L
                 autoPlayFunction: autoPlayFunction,
             },
             useUnresolvedData: true,
+            // Auto-repair socket closed events (useful for 24/7 bots)
+            onSocketClosed: {
+                autoRepair: true, // enable auto-repair when voice socket closes unexpectedly
+                repairDelay: 1000, // wait 1s before attempting repair
+                maxRepairAttempts: 3, // max 3 repair attempts within threshold
+                repairAttemptThreshold: 60_000, // 1 minute threshold for counting attempts
+                destroyOnMaxFailed: true, // destroy player if max attempts exceeded
+            },
         },
         queueOptions: {
             maxPreviousTracks: 10,

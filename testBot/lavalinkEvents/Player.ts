@@ -46,6 +46,19 @@ export function PlayerEvents(client:BotClient) {
     .on("playerSocketClosed", (player, payload) => {
         logPlayer(client, player, "Player socket got closed from lavalink :: ", payload);
     })
+    .on("playerSocketClosedRepair", (player, payload, repairAttempt) => {
+        logPlayer(client, player, `Auto-repairing player socket (attempt ${repairAttempt}) after close code ${payload.code}`);
+        // You can send a message to the text channel to inform users
+        sendPlayerMessage(client, player, {
+            embeds: [
+                new EmbedBuilder()
+                .setColor("Orange")
+                .setTitle("🔧 Auto-Repairing Connection")
+                .setDescription(`Reconnecting voice... (attempt ${repairAttempt})`)
+                .setTimestamp()
+            ]
+        });
+    })
     .on("playerUpdate", (player) => {
         // use this event to udpate the player in the your cache if you want to save the player's data(s) externally!
         /**
